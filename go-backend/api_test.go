@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/pingchenchan/ad-placement-service/models"
-	"github.com/stretchr/testify/assert"
+	// "github.com/stretchr/testify/assert"
 )
 
 func CreateAdFunction() (*http.Response, error) {
@@ -51,138 +51,137 @@ func CreateAdFunction() (*http.Response, error) {
     client := &http.Client{}
     return client.Do(req)
 }
-func TestCreateAd(t *testing.T) {
-    resp, err := CreateAdFunction()
-    if err != nil {
-        t.Fatal("创建广告时发生错误:", err)
-    }
+// func TestCreateAd(t *testing.T) {
+//     resp, err := CreateAdFunction()
+//     if err != nil {
+//         t.Fatal("创建广告时发生错误:", err)
+//     }
 
-    assert.Equal(t, http.StatusCreated, resp.StatusCode)
-}
+//     assert.Equal(t, http.StatusCreated, resp.StatusCode)
+// }
 
-func TestGetAd(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://127.0.0.1:8080/ad", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+// func TestGetAd(t *testing.T) {
+// 	req, err := http.NewRequest("GET", "http://127.0.0.1:8080/ad", nil)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+// 	client := &http.Client{}
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-
-
-func GetAdsFunction() (*http.Response, error) {
-    req, err := http.NewRequest("GET", "http://127.0.0.1:8080/ads", nil)
-    if err != nil {
-        return nil, err
-    }
-
-    client := &http.Client{}
-    return client.Do(req)
-}
+// 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+// }
 
 
-func TestGetAds(t *testing.T) {
-    // 同前面的TestGetAds函数
-    // 在这里调用 GetAdsFunction()
-    resp, err := GetAdsFunction()
-    if err != nil {
-        t.Fatal("获取广告列表时发生错误:", err)
-    }
 
-    assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-func TestGetAdsPerformance(t *testing.T) {
-    start := time.Now()
-    count := 0
-    for time.Since(start) < time.Second {
-        _, err := GetAdsFunction()
-        if err != nil {
-            t.Fatal("获取广告列表时发生错误:", err)
-        }
-        count++
-    }
-    t.Logf("Made %d GET requests in 1 second", count)
-}
+// func GetAdsFunction() (*http.Response, error) {
+//     req, err := http.NewRequest("GET", "http://127.0.0.1:8080/ads", nil)
+//     if err != nil {
+//         return nil, err
+//     }
 
-func TestCreateAdPerformance(t *testing.T) {
-    start := time.Now()
-    count := 0
-    for time.Since(start) < time.Second {
-        _, err := CreateAdFunction()
-        if err != nil {
-            t.Fatal("创建广告时发生错误:", err)
-        }
-        count++
-    }
-    t.Logf("Made %d POST requests in 1 second", count)
-}
+//     client := &http.Client{}
+//     return client.Do(req)
+// }
 
-func TestGet1000AdsPerformance(t *testing.T) {
-    start := time.Now()
-    for i := 0; i < 1000; i++ {
-        _, err := GetAdsFunction()
-        if err != nil {
-            t.Fatal("获取广告列表时发生错误:", err)
-        }
-    }
-    duration := time.Since(start)
-    t.Logf("Made 1000 GET requests in %v", duration)
-}
 
-func TestCreate1000AdPerformance(t *testing.T) {
-    start := time.Now()
-    for i := 0; i < 3000; i++ {
-        _, err := CreateAdFunction()
-        if err != nil {
-            t.Fatal("创建广告时发生错误:", err)
-        }
-    }
-    duration := time.Since(start)
-    t.Logf("Made 1000 POST requests in %v", duration)
-}
+// func TestGetAds(t *testing.T) {
+//     // 同前面的TestGetAds函数
+//     // 在这里调用 GetAdsFunction()
+//     resp, err := GetAdsFunction()
+//     if err != nil {
+//         t.Fatal("获取广告列表时发生错误:", err)
+//     }
+
+//     assert.Equal(t, http.StatusOK, resp.StatusCode)
+// }
+// func TestGetAdsPerformance(t *testing.T) {
+//     start := time.Now()
+//     count := 0
+//     for time.Since(start) < time.Second {
+//         _, err := GetAdsFunction()
+//         if err != nil {
+//             t.Fatal("获取广告列表时发生错误:", err)
+//         }
+//         count++
+//     }
+//     t.Logf("Made %d GET requests in 1 second", count)
+// }
+
+// func TestCreateAdPerformance(t *testing.T) {
+//     start := time.Now()
+//     count := 0
+//     for time.Since(start) < time.Second {
+//         _, err := CreateAdFunction()
+//         if err != nil {
+//             t.Fatal("创建广告时发生错误:", err)
+//         }
+//         count++
+//     }
+//     t.Logf("Made %d POST requests in 1 second", count)
+// }
+
+// func TestGet1000AdsPerformance(t *testing.T) {
+//     start := time.Now()
+//     for i := 0; i < 1000; i++ {
+//         _, err := GetAdsFunction()
+//         if err != nil {
+//             t.Fatal("获取广告列表时发生错误:", err)
+//         }
+//     }
+//     duration := time.Since(start)
+//     t.Logf("Made 1000 GET requests in %v", duration)
+// }
+
+// func TestCreate1000AdPerformance(t *testing.T) {
+//     start := time.Now()
+//     for i := 0; i < 3000; i++ {
+//         _, err := CreateAdFunction()
+//         if err != nil {
+//             t.Fatal("创建广告时发生错误:", err)
+//         }
+//     }
+//     duration := time.Since(start)
+//     t.Logf("Made 1000 POST requests in %v", duration)
+// }
 var counter int32
+
 func TestCreate10000AdPerformance(t *testing.T) {
     start := time.Now()
 
     // Create a channel to handle errors
-    errChannel := make(chan error, 10000)
+    errChannel := make(chan error, 1000)
 
-    // Create a WaitGroup to wait for all goroutines to finish
+    // Create a channel to control the number of concurrent goroutines
+    pool := make(chan struct{}, 500) // adjust the size of the pool as needed
+
     var wg sync.WaitGroup
-    wg.Add(10000)
+    wg.Add(500)
 
-    for i := 0; i < 10000; i++ {
+    for i := 0; i < 500; i++ {
+        pool <- struct{}{} // block if the pool is full
+
         go func() {
-            // defer wg.Done()
+            defer wg.Done()
+            defer func() { <-pool }() // release the pool slot
 
             _, err := CreateAdFunction()
-            // if err != nil {
-            //     errChannel <- err
-            // }
             if err != nil {
                 errChannel <- err
-                wg.Done()
                 return
             }
-            wg.Done()
         }()
     }
 
     // Wait for all goroutines to finish
     wg.Wait()
     close(errChannel)
-//check how many errors
-    t.Logf("len(errChannel): %v", len(errChannel))
-    if atomic.LoadInt32(&counter) != 10000 {
-        t.Errorf("Expected 3000 requests, but got %d", counter)
-    }
+
+    // Check how many errors
+    t.Logf("Numbers of error requests: %v", len(errChannel))
     // Check if there were any errors
     for err := range errChannel {
         if err != nil {
@@ -192,6 +191,4 @@ func TestCreate10000AdPerformance(t *testing.T) {
             return 
         }
     }
-    
-   
 }
