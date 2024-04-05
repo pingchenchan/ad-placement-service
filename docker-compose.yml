@@ -63,6 +63,8 @@ services:
       - MONGO_PORT=27017
       - MONGO_USER=admin
       - MONGO_PASS=admin
+    volumes:
+      - ./test_report:/app/tests
 networks:
   MONGO:
     name: MONGO

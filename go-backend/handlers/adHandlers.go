@@ -59,8 +59,32 @@ func init() {
 }
 
 var serverCounter int32
-
 func CreateAd(c *gin.Context, countryCode map[string]bool) {
+    var ad models.Ad
+
+    // Bind the POST data to the 'ad' variable
+    if err := c.ShouldBindJSON(&ad); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    valid, errMsg := models.ValidateAd(ad, countryCode)
+    if !valid {
+        c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+        return
+    }
+
+    // Insert the ad into the database
+    collection := db.DB.Database("advertising").Collection("ads")
+    _, err := collection.InsertOne(context.Background(), ad)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.Status(http.StatusCreated)
+}
+func CreateBulkAd(c *gin.Context, countryCode map[string]bool) {
 	var ad models.Ad
 
 	// Bind the POST data to the 'ad' variable
