@@ -9,7 +9,5 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -v -o app
 
-FROM scratch
-COPY --from=builder /app/app ./
-COPY --from=builder /app/models/countryCode.json ./countryCode.json
-CMD ["./app"]
+FROM builder as tester
+CMD ["go", "test", "-v", "./..."]

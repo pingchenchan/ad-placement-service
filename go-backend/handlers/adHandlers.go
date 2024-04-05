@@ -34,7 +34,7 @@ func init() {
 	// Start a new goroutine
 	go func() {
 		// Create a ticker that fires every 0.3 seconds
-		ticker := time.NewTicker(300 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
 		// Create a slice to store Ad objects

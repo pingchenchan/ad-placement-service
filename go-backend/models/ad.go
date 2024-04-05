@@ -40,9 +40,9 @@ type CountryCode struct {
 }
 
 // loadCountryCodes loads the country codes from the JSON file
-func LoadCountryCodes() (map[string]bool, error) {
+func LoadCountryCodes(path string) (map[string]bool, error) {
     v := make(map[string]bool)
-    file, err := os.Open("./countryCode.json")
+    file, err := os.Open(path)
     if err != nil {
         return nil, err
     }

@@ -9,7 +9,9 @@ import (
     "github.com/pingchenchan/ad-placement-service/models"
 )
 
-func main() {
+
+func init() {
+    // Set client options
     err := db.ConnectDB("mongodb://admin:admin@mongo:27017")
     if err != nil {
         log.Fatal(err)
@@ -19,10 +21,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
+}
+func main() {
+   
 
 
     router := gin.Default()
-    countryCodeValidator, err := models.LoadCountryCodes()
+    countryCodeValidator, err := models.LoadCountryCodes("./countryCode.json")
     if err != nil {
         log.Fatalf("Failed to create validator: %v", err)
     }

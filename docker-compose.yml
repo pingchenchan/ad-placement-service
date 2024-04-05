@@ -48,8 +48,21 @@ services:
       - MONGO
     depends_on:
       - mongo
-
-
+      - mongo-express
+  go-backend-test:
+    container_name: go-backend-test
+    build:
+      dockerfile: Dockerfile.test
+      context: ./go-backend
+    networks:
+      - MONGO
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_HOST=mongo
+      - MONGO_PORT=27017
+      - MONGO_USER=admin
+      - MONGO_PASS=admin
 networks:
   MONGO:
     name: MONGO
