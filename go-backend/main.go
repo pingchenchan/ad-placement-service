@@ -12,7 +12,7 @@ import (
 
 func init() {
     // Set client options
-    err := db.ConnectDB("mongodb://admin:admin@mongo:27017")
+    err := db.ConnectMongoDB("mongodb://admin:admin@mongo:27017")
     if err != nil {
         log.Fatal(err)
     }
@@ -21,11 +21,14 @@ func init() {
     if err != nil {
         log.Fatal(err)
     }
+
+    err = db.ConnectRedis("redis:6379")
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 func main() {
    
-
-
     router := gin.Default()
     countryCodeValidator, err := models.LoadCountryCodes("./countryCode.json")
     if err != nil {
@@ -37,7 +40,11 @@ func main() {
     router.POST("/ads", func(c *gin.Context) {
         handlers.CreateAd(c, countryCodeValidator)
     })
+    router.POST("/bulkAds", func(c *gin.Context) {
+        handlers.CreateBulkAd(c, countryCodeValidator)
+    })
     router.GET("/ads", handlers.GetAds)
+    router.GET("/adsRedix", handlers.GetAdsWRedis)
 
 	router.GET("/ad", handlers.GetAd)
     // Start server

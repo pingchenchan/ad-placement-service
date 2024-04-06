@@ -94,11 +94,11 @@ func ValidateAge(ad Ad) bool { //Age, min=1,max=100
     return true
 }
 
-func ValidateGender(ad Ad) bool { //Gender must be M or F
+func ValidateGender(ad Ad) bool { //Gender must be M, F or empty
     for _, condition := range ad.Conditions {
         if condition.Gender != nil {
             gender := *condition.Gender
-            if gender != "M" && gender != "F" {
+            if gender != "M" && gender != "F" && gender != "" {
                 return false
             }
         }

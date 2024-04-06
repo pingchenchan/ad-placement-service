@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -45,7 +46,7 @@ func init() {
 				// Every 0.3 seconds, write all Ad objects in the slice to the database
 				if len(ads) > 0 {
 
-					writeBulkAds(ads)
+					go writeBulkAds(ads)
 					// Clear the slice
 					ads = make([]AdWithCtx, 0)
 
@@ -148,7 +149,47 @@ func GetAd(c *gin.Context) {
 }
 
 // GetAds retrieves ads based on the given conditions
+func GetAdsWRedis(c *gin.Context) {
+	ctx := context.Background()
+    var params models.AdQueryParams
+    if err := c.ShouldBindQuery(&params); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+
+	// Generate a unique key for this query (store the key in Redis)
+    key := fmt.Sprintf("ads:%v", params)
+	result, err := db.Redis.Get(context.Background(), key).Result()
+	if err != nil {
+		// The result is not in Redis, we need to query the database
+		collection := db.DB.Database("advertising").Collection("ads")
+
+		ads, err := queryAds(collection, params.Offset, params.Limit, params.Age, params.Gender, params.Country, params.Platform)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error while retrieving ads"})
+			return
+		}
+		// Store the result in Redis for future queries
+		adsJson, _ := json.Marshal(ads)
+		err = db.Redis.Set(ctx, key, adsJson, time.Minute).Err()
+		if err != nil {
+			log.Printf("Failed to cache the result in Redis: %v", err)
+		}
+
+		c.JSON(http.StatusOK, ads)
+	}else {
+        // The result was in Redis, we can return it directly
+		//log the result is get from redis
+        var ads []*models.Ad
+        json.Unmarshal([]byte(result), &ads)
+        c.JSON(http.StatusOK, ads)
+    }
+}
+
+
 func GetAds(c *gin.Context) {
+
     var params models.AdQueryParams
     if err := c.ShouldBindQuery(&params); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -156,22 +197,25 @@ func GetAds(c *gin.Context) {
     }
 
 	log.Print(params)
-
-    collection := db.DB.Database("advertising").Collection("ads")
-
-    ads, err := queryAds(collection, params.Offset, params.Limit, params.Age, params.Gender, params.Country, params.Platform)
-    log.Print(ads)
+	// The result is not in Redis, we need to query the database
+	collection := db.DB.Database("advertising").Collection("ads")
+	ads, err := queryAds(collection, params.Offset, params.Limit, params.Age, params.Gender, params.Country, params.Platform)
+	log.Print(ads)
 	if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error while retrieving ads"})
-        return
-    }
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error while retrieving ads"})
+		return
+	}
 
-    c.JSON(http.StatusOK, ads)
+	c.JSON(http.StatusOK, ads)
+
 }
 
 func queryAds(collection *mongo.Collection, offset, limit int, age int, gender, country, platform string) ([]*models.Ad, error) {
 	// Build the query
 	query := bson.D{}
+	now := time.Now()
+    query = append(query, bson.E{Key: "startAt", Value: bson.D{{Key: "$lte", Value: now}}})
+    query = append(query, bson.E{Key: "endAt", Value: bson.D{{Key: "$gte", Value: now}}})
 	if age != 0 {
 		query = append(query, bson.E{Key: "conditions", Value: bson.D{{Key: "$elemMatch", Value: bson.D{
 			{Key: "ageStart", Value: bson.D{{Key: "$lte", Value: age}}},
