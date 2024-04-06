@@ -1,0 +1,25 @@
+FROM golang:1.21 as builder
+
+WORKDIR /app
+
+COPY go.* ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -v -o app
+
+FROM builder as tester
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreate10000bulkAdHttp' > /app/tests/Create10000bulkAdHttp_report.txt"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreate10000BulkAd' > /app/tests/Create10000BulkAd_report.txt"]
+
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreate10000Ad' > /app/tests/Create10000Ad_report.txt"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreate10000AdHttp' > /app/tests/Create10000AdHttp_report.txt"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestGet10000AdHttp' > /app/tests/TestGet10000AdHttp_report.txt"]
+ CMD ["sh", "-c", "go test -v -cover -run 'TestGet10000AdRedixHttp'"]
+#CMD ["sh", "-c", "go test -v -cover -run 'TestGet10000AdHttp'"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestInitialLoad'"]
+
+
+
+

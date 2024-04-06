@@ -196,11 +196,11 @@ func GetAds(c *gin.Context) {
         return
     }
 
-	log.Print(params)
+	// log.Print(params)
 	// The result is not in Redis, we need to query the database
 	collection := db.DB.Database("advertising").Collection("ads")
 	ads, err := queryAds(collection, params.Offset, params.Limit, params.Age, params.Gender, params.Country, params.Platform)
-	log.Print(ads)
+	// log.Print(ads)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error while retrieving ads"})
 		return

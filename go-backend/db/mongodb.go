@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ func DropDatabaseAndCollection(dbName, collectionName string) error {
     if err != nil {
         return fmt.Errorf("failed to drop database: %w", err)
     }
-
+ 	log.Print("successfullly dropped database and collection")
     return nil
 }
 func EnsureCollectionAndIndexes(dbName, collectionName string) (*mongo.Collection, error) {
@@ -66,6 +67,7 @@ func EnsureCollectionAndIndexes(dbName, collectionName string) (*mongo.Collectio
 	if err != nil {
 		return nil, fmt.Errorf("failed to create indexes: %w", err)
 	}
+	log.Print("successfullly created indexes")
 
 	return collection, nil
 }

@@ -273,5 +273,5 @@ func logRequestStats(t *testing.T, timeChannel <-chan time.Duration, endpoint st
     t.Logf("Min request time: %v", min)
 
     duration := time.Since(start)
-    t.Logf("Made 10000 POST requests in %v", duration)
+    t.Logf("Made requests in %v", duration)
 }

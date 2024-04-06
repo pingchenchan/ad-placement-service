@@ -71,6 +71,7 @@ services:
     volumes:
       - ./test_report:/app/tests
   redis:
+    container_name: redis
     image: "redis:alpine"
     networks:
       - MONGO
