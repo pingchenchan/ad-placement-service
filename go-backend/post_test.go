@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
-
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,202 +15,160 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pingchenchan/ad-placement-service/handlers"
 	"github.com/pingchenchan/ad-placement-service/models"
-
 )
 
-func createSampleAdJSON() ([]byte, error){
-    ad := createSampleAd()
-    adData, err := json.Marshal(ad)
-    if err != nil {
-        return nil, err
-    }
-    return adData, nil
+
+// createAdFunction sends a POST request to create an ad.
+func createAdFunction(endpoint string, adData []byte) (*http.Response, error) {
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(adData))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	return client.Do(req)
 }
 
-func CreateAdFunction(endpoint string, adData []byte) (*http.Response, error) {
-    req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(adData))
-    if err != nil {
-        return nil, err
-    }
-
-    req.Header.Set("Content-Type", "application/json")
-
-    client := &http.Client{}
-    return client.Do(req)
-}
+// createAdRequest creates a POST request to the specified router with the ad data.
 func createAdRequest(t *testing.T, router *gin.Engine, ad models.Ad) int {
-    // Convert the ad to JSON
-    adJson, _ := json.Marshal(ad)
-
-    // Create a request to pass to our handler
-    req, _ := http.NewRequest(http.MethodPost, "/ads", bytes.NewBuffer(adJson))
-
-    // Create a ResponseRecorder to record the response
-    rr := httptest.NewRecorder()
-
-    // Perform the request
-    router.ServeHTTP(rr, req)
-
-    // Check the status code
-    return rr.Code
+	adJSON, _ := json.Marshal(ad)
+	req, _ := http.NewRequest(http.MethodPost, "/dummy", bytes.NewBuffer(adJSON))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	return rr.Code
 }
 
-func createSampleAd() models.Ad {
-    // Create a sample ad
-    uniqueID := time.Now().UnixNano() // Generate a unique ID based on the current time
-    ad := models.Ad{
-        Title: "Sample Ad" + strconv.FormatInt(uniqueID, 10),
-        StartAt: time.Now(),
-        EndAt: time.Now().Add(24 * time.Hour),
-        Conditions: []models.Condition{
-            {
-                AgeStart: new(int),
-                AgeEnd:   new(int),
-                Gender:   new(string),
-                Country:  []string{"TW", "JP"},
-                Platform: []string{"ios", "web"},
-            },
-        },
-    }
 
-    *ad.Conditions[0].AgeStart = 25
-    *ad.Conditions[0].AgeEnd = 35
-    *ad.Conditions[0].Gender = "M"
-
-    return ad
-}
-
-func TestCreateBulkAd(t *testing.T) {
-    // Create a Gin router
-    // gin.SetMode(gin.TestMode)
-    gin.SetMode(gin.ReleaseMode)
-    router := gin.Default()
-    countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
-
-    if err != nil {
-        log.Fatalf("Failed to create validator: %v", err)
-    }
-
-    // Define the route similar to your actual application
-    router.POST("/ads", func(c *gin.Context) {
-        handlers.CreateBulkAd(c, countryCodeValidator)
-    })
-
-    ad := createSampleAd()
-    if status := createAdRequest(t, router, ad); status != http.StatusCreated {
-        t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
-    }
-}
-
+// testCreateAd tests the ad creation process in a concurrent environment.
 func testCreateAd(t *testing.T, handlerFunc gin.HandlerFunc, endpoint string) {
-    // Create a Gin router
-    gin.SetMode(gin.ReleaseMode)
-    router := gin.Default()
+	router := gin.Default()
+    router.POST("/dummy", handlerFunc)
+	var wg sync.WaitGroup
+	wg.Add(10000)
+
+	var successCount int64 = 0
+	var failCount int64 = 0
+	timeChannel := make(chan time.Duration, 10000)
+    var firstRequestTime, lastRequestTime time.Time
+    sampleAds :=  GenerateAds(10000)
+	start := time.Now()
 
 
-    // Define the route similar to your actual application
-    router.POST("/ads", handlerFunc)
-
-    var wg sync.WaitGroup
-    wg.Add(10000)
-
-    var successCount int64 = 0
-    var failCount int64 = 0
-    timeChannel := make(chan time.Duration, 10000)
-    // Record the start time
-    start := time.Now()
-
-    for i := 0; i < 10000; i++ {
-        go func() {
-            defer wg.Done()
-
-            // Create a sample ad
-            ad := createSampleAd()
+	for i := 0; i < 10000; i++ {
+		go func(i int) {
+			defer wg.Done()
+            ad := sampleAds[i]
             startTime := time.Now()
-            // Check the status code
+            if i == 0 {
+                firstRequestTime = startTime
+            } else if i == 9999 {
+                lastRequestTime = startTime
+            }
             if status := createAdRequest(t, router, ad); status != http.StatusCreated {
                 atomic.AddInt64(&failCount, 1)
             } else {
                 atomic.AddInt64(&successCount, 1)
             }
-            timeChannel <- time.Since(startTime)
-        }()
-    }
+			timeChannel <- time.Since(startTime)
+		}(i)
+	}
 
-    // Wait for all goroutines to finish
-    wg.Wait()
-    close(timeChannel)
-    // Record the end time
-    end := time.Now()
+	wg.Wait()
+	close(timeChannel)
+	t.Logf("Numbers of successful requests: %v", atomic.LoadInt64(&successCount))
+	t.Logf("Numbers of error requests: %v", atomic.LoadInt64(&failCount))
+    t.Logf("Time from first to last request: %v", lastRequestTime.Sub(firstRequestTime))
 
-    // Calculate the total response time
-    totalResponseTime := end.Sub(start)
-
-    t.Logf("Numbers of successful requests: %v", atomic.LoadInt64(&successCount))
-    t.Logf("Numbers of error requests: %v", atomic.LoadInt64(&failCount))
-    t.Logf("Total response time: %v", totalResponseTime)
-
-    // Calculate the average, max, and min request time
-    logRequestStats(t, timeChannel, endpoint, start)
+	logRequestStats(t, timeChannel, endpoint, start)
 }
 
-func TestCreate10000Ad(t *testing.T) {
+// logRequestStats logs the statistics of the request times.
+func logRequestStats(t *testing.T, timeChannel <-chan time.Duration, endpoint string, start time.Time) {
+	var total, max time.Duration
+	min := time.Duration(math.MaxInt64)
+	var count int
+
+	for requestTime := range timeChannel {
+		total += requestTime
+		if requestTime > max {
+			max = requestTime
+		}
+		if requestTime < min {
+			min = requestTime
+		}
+		count++
+	}
+
+	average := total / time.Duration(count)
+
+	t.Logf("Endpoint: %v", endpoint)
+	t.Logf("Average request time: %v", average)
+	t.Logf("Max request time: %v", max)
+	t.Logf("Min request time: %v", min)
+	t.Logf("Total duration of requests: %v", time.Since(start))
+}
+
+// TestCreate10000Ad tests the creation of 10000 individual ads.
+func TestCreateAd_Concurrency(t *testing.T) {
     countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
     if err != nil {
-        log.Fatalf("Failed to create validator: %v", err)
+        log.Fatalf("Failed to load country codes: %v", err)
     }
     testCreateAd(t, func(c *gin.Context) {
         handlers.CreateAd(c, countryCodeValidator)
-    }, "create Ad")
+    }, "/ads")
 }
 
-func TestCreate10000BulkAd(t *testing.T) {
+// TestCreate10000BulkAd tests the bulk creation of 10000 ads.
+func TestCreateAd_BulkWrite_Concurrency(t *testing.T) {
     countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
     if err != nil {
-        log.Fatalf("Failed to create validator: %v", err)
+        log.Fatalf("Failed to load country codes: %v", err)
     }
     testCreateAd(t, func(c *gin.Context) {
         handlers.CreateBulkAd(c, countryCodeValidator)
-    }, "create Bulk Ad")
+    }, "/bulkAds")
 }
 
-
-
-func TestCreate10000AdHttp(t *testing.T) {
-     create10000Ad(t, "http://go-backend:8080/ads")
-
+// TestCreate10000AdHttp tests the HTTP endpoint for creating 10000 individual ads.
+func TestCreateAd_HTTP_Endpoint_Concurrency(t *testing.T) {
+    create10000Ad(t, "http://go-backend:8080/ads")
 }
-func TestCreate10000bulkAdHttp(t *testing.T) {
+
+// TestCreate10000BulkAdHttp tests the HTTP endpoint for bulk creating 10000 ads.
+func TestCreateAd_BulkWrite_HTTP_Endpoint_Concurrency(t *testing.T) {
     create10000Ad(t, "http://go-backend:8080/bulkAds")
 }
 
+// create10000Ad is a helper function to create 10000 ads using the specified endpoint.
 func create10000Ad(t *testing.T, endpoint string) {
-    start := time.Now()
-
-    // Create a channel to handle errors
-    errChannel := make(chan error, 10000)
-
-    // Create a channel to handle success
-    successChannel := make(chan struct{}, 10000)
-
-    // Create a channel to collect request times
-    timeChannel := make(chan time.Duration, 10000)
-
     var wg sync.WaitGroup
     wg.Add(10000)
 
+    errChannel := make(chan error, 10000)
+    successChannel := make(chan struct{}, 10000)
+    timeChannel := make(chan time.Duration, 10000)
+    var firstRequestTime, lastRequestTime time.Time
+    sampleAds :=  GenerateAds(10000)
+    start := time.Now()
+
     for i := 0; i < 10000; i++ {
-        go func() {
+        go func(i int) {
             defer wg.Done()
+            adData, err := json.Marshal(sampleAds[i]) 
+            if err != nil {
+                errChannel <- err
+                return
+            }
 
-            // Record the start time of the request
-            adData, err := createSampleAdJSON()
-            
             startTime := time.Now()
+            if i == 0 {
+                firstRequestTime = startTime
+            }else if i == 9999 {
+                lastRequestTime = startTime
+            }
 
-            _, err = CreateAdFunction(endpoint,adData)
-
-            // Record the end time of the request and send the duration to the time channel
+            _, err = createAdFunction(endpoint, adData)
             timeChannel <- time.Since(startTime)
 
             if err != nil {
@@ -220,58 +176,22 @@ func create10000Ad(t *testing.T, endpoint string) {
             } else {
                 successChannel <- struct{}{}
             }
-        }()
+        }(i)
     }
 
-    // Wait for all goroutines to finish
     wg.Wait()
     close(errChannel)
     close(successChannel)
     close(timeChannel)
 
-
-
-    t.Logf("")
-    // Check how many errors
     t.Logf("Numbers of error requests: %v", len(errChannel))
-    // Check how many successes
     t.Logf("Numbers of successful requests: %v", len(successChannel))
-
-    // Check if there were any errors
+    t.Logf("Time from first to last request: %v", lastRequestTime.Sub(firstRequestTime))
     for err := range errChannel {
         if err != nil {
-            t.Logf("error, %v", err)
+            t.Logf("Error: %v", err)
         }
     }
 
-    // Calculate the average, max, and min request time
     logRequestStats(t, timeChannel, endpoint, start)
-}
-
-func logRequestStats(t *testing.T, timeChannel <-chan time.Duration, endpoint string, start time.Time) {
-    // Calculate the average, max, and min request time
-    var total time.Duration
-    var max time.Duration
-    var min time.Duration = time.Duration(math.MaxInt64)
-    var count int
-    for requestTime := range timeChannel {
-        total += requestTime
-        if requestTime > max {
-            max = requestTime
-        }
-        if requestTime < min {
-            min = requestTime
-        }
-        count++
-    }
-    average := total / time.Duration(count)
-
-    t.Logf("Endpoint: %v", endpoint)
-
-    t.Logf("Average request time: %v", average)
-    t.Logf("Max request time: %v", max)
-    t.Logf("Min request time: %v", min)
-
-    duration := time.Since(start)
-    t.Logf("Made requests in %v", duration)
 }

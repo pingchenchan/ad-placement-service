@@ -26,4 +26,7 @@ func ConnectRedis(uri string) ( error) {
 	return  nil
 }
 
-
+func ClearRedis() error {
+	ctx := context.Background()
+	return Redis.FlushAll(ctx).Err()
+}

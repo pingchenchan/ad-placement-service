@@ -157,7 +157,6 @@ func GetAdsWRedis(c *gin.Context) {
         return
     }
 
-
 	// Generate a unique key for this query (store the key in Redis)
     key := fmt.Sprintf("ads:%v", params)
 	result, err := db.Redis.Get(context.Background(), key).Result()

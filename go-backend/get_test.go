@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -14,26 +15,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/pingchenchan/ad-placement-service/db"
+	"github.com/pingchenchan/ad-placement-service/handlers"
 	"github.com/pingchenchan/ad-placement-service/models"
 	"github.com/stretchr/testify/assert"
 )
 
 type AdsResponse []models.Ad
 
-func GenerateAds() []models.Ad {
-	ads := make([]models.Ad, 3000)
+func GenerateAds(numbers int) []models.Ad {
+	ads := make([]models.Ad,numbers)
 	now := time.Now()
 
 	genders := []string{"M", "F", ""}
-	countries := []string{"TW", "JP", ""}
+	countries := []string{"TW","JP","CN","CA", "BE", "BZ", "IO","BG","CM","NL",""}
 	platforms := []string{"android", "ios", "web", ""}
 	ages := []int{-1, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90}
 
 	rand.Seed(time.Now().UnixNano())
 	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	for i := 0; i < 3000; i++ {
+	for i := 0; i < numbers; i++ {
 		ad := models.Ad{
 			Conditions: []models.Condition{
 				{
@@ -72,12 +75,12 @@ func GenerateAds() []models.Ad {
 			randStr[i] = charset[rand.Intn(len(charset))]
 		}
 
-		if i < 1000 {
+		if i < numbers/3 {
 			// StartAt < NOW < EndAt
 			ad.StartAt = now.Add(-1 * time.Hour * 24)
 			ad.EndAt = now.Add(1 * time.Hour * 24)
 			ad.Title = "PastAd_Age-" + strconv.Itoa(ages[i%len(ages)]) + "~" + strconv.Itoa(ages[i%len(ages)]+10) + "_" + genders[i%len(genders)] + "_" + strings.Join(ad.Conditions[0].Country, ", ") + "_" + strings.Join(ad.Conditions[0].Platform, ", ") + "_" + string(randStr)
-		} else if i < 2000 {
+		} else if i < numbers*2/3 {
 			// EndAt < NOW
 			ad.StartAt = now.Add(-2 * time.Hour * 24)
 			ad.EndAt = now.Add(-1 * time.Hour * 24)
@@ -133,7 +136,7 @@ func TestInitialLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ads := GenerateAds()
+	ads := GenerateAds(3000)
 
 	for _, ad := range ads {
 
@@ -141,7 +144,7 @@ func TestInitialLoad(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = CreateAdFunction("http://go-backend:8080/ads", adData)
+		_, err = createAdFunction("http://go-backend:8080/ads", adData)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -152,18 +155,45 @@ func TestInitialLoad(t *testing.T) {
 
 func TestGet10000AdHttp(t *testing.T) {
 	// TestInitialLoad(t )
-	Get10000Ad(t, "http://go-backend:8080/ads", 1)
+	Get10000AdHTTP(t, "http://go-backend:8080/ads", 1000)
 
 }
 func TestGet10000AdRedixHttp(t *testing.T) {
+	TestInitialLoad(t )
+	err:=db.ClearRedis()
+	if err != nil {
+		t.Fatal(err)
+	}
+	Get10000AdHTTP(t, "http://go-backend:8080/adsRedix", 5000)
+}
+
+func TestGet10000AdUnit(t *testing.T) {
+// TestInitialLoad(t )
+	gin.SetMode(gin.ReleaseMode)
+    router := gin.Default()
+    router.GET("/adsUnit",  handlers.GetAds)
+
+	// Create a test server
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	// endpoint := ts.URL + "/adsUnit"
+
+	performTest(t,"http://go-backend:8080/adsUnit", 10000, getAdFunction)
+}
+func TestGet10000AdRedixUnit(t *testing.T) {
 	// TestInitialLoad(t )
-	Get10000Ad(t, "http://go-backend:8080/adsRedix", 1000)
+	err:=db.ClearRedis()
+	if err != nil {
+		t.Fatal(err)
+	}
+	Get10000AdHTTP(t, "http://go-backend:8080/adsRedix", 5000)
 }
 
 func genRandomQuery(numQueries int) []models.AdQueryParams {
     // Create slices for the enum parameters
     genders := []string{"M", "F", ""}
-    countries := []string{"TW", "JP",""}
+    countries := []string{"TW","JP","CN","CA", "BE", "BZ", "IO","BG","CM","NL",""}
     platforms := []string{"android", "ios", "web",""}
 
     // Create a slice to hold the different queries
@@ -174,7 +204,7 @@ func genRandomQuery(numQueries int) []models.AdQueryParams {
         for _, country := range countries {
             for _, platform := range platforms {
                 for offset := 0; offset < 5; offset++ {
-                    for limit := 1; limit <= 100; limit++ {
+                    for limit := 5; limit <= 6; limit++ {
                         for age := 1; age <= 100; age++ {
                             if len(queries) < numQueries {
                                 queries = append(queries, models.AdQueryParams{
@@ -220,11 +250,9 @@ func checkQueriesUnique(queries []models.AdQueryParams) bool {
     // Return whether all queries are unique
     return isUnique
 }
-func Get10000Ad(t *testing.T, endpoint string, numQueries int) {
-	//Get 10000 request with same query
 
-	
-
+func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction func(string, string) (*http.Response, error)) {
+    //Get 10000 request with same query
 	var TEST_NUMBER = 10000
 
 	// Create a channel to handle errors
@@ -256,20 +284,9 @@ func Get10000Ad(t *testing.T, endpoint string, numQueries int) {
 
 			// Record the start time of the request
 			p := queries[i % numQueries]//random query
-			//print i % numQueries and i and numQueries
-			// fmt.Println(i % numQueries, i, numQueries)
 
 			queriesChannel <- p
-			// p := models.AdQueryParams{
-			// 	Offset:   0,
-			// 	Limit:    3,  // Limit between 1 and 100
-			// 	Age:      15, // Age between 1 and 100
-			// 	Gender:   "M",
-			// 	Country:  "TW",
-			// 	Platform: "android",
-			// }
 
-			// log.Printf("Query: %v", p)
 			getData := createSampleGetQuery(p)
 
 			startTime := time.Now()
@@ -347,6 +364,17 @@ func Get10000Ad(t *testing.T, endpoint string, numQueries int) {
 
 	// Calculate the average, max, and min request time
 	logRequestStats(t, timeChannel, endpoint, start)
+}
+func Get10000AdUnit(t *testing.T, numQueries int, handler http.Handler) {
+	// Create a test server
+    ts := httptest.NewServer(handler)
+    defer ts.Close()
+
+    performTest(t, ts.URL, numQueries, getAdFunction)
+}
+
+func Get10000AdHTTP(t *testing.T, endpoint string, numQueries int) {
+    performTest(t, endpoint, numQueries, getAdFunction)
 }
 
 func validateAd(ad *models.Ad, p models.AdQueryParams) bool {

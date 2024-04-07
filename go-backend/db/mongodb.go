@@ -122,10 +122,12 @@ func CreateIndexes(collection *mongo.Collection) error {
 
 	compoundIndexModel := mongo.IndexModel{
 		Keys: bson.D{
+			{Key: "startAt", Value: 1},
+			{Key: "endAt", Value: 1},
 			{Key: "condition.ageStart", Value: 1},
 			{Key: "condition.ageEnd", Value: 1},
-			{Key: "condition.gender", Value: 1},
 			{Key: "condition.country", Value: 1},
+			{Key: "condition.gender", Value: 1},
 			{Key: "condition.platform", Value: 1},
 		},
 	}
