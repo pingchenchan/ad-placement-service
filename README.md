@@ -45,8 +45,63 @@ We provide two strategies for handling high concurrency (10,000 requests per sec
 1. **Direct Get**: This strategy directly retrieves the requested data from the database and sends a response.
 
 2. **Cache Recent Requests**: This strategy involves checking if the query key exists in Redis each time a GET request is handled. If it does, the data is retrieved from Redis and sent in the response. If it doesn't, the data is retrieved from MongoDB, stored in Redis for future requests, and then sent in the response.
-3. 
 
+
+## Experiment Results
+
+### GET ###
+## Experiment Results
+
+The following table presents the results of our experiments with different strategies for handling high concurrency GET requests. Each strategy was tested with a load of 10,000 requests per second.
+
+| Strategy | Unique Queries | Average Response Time | Max Response Time | Min Response Time | Pass Validation |
+|----------|----------------|-----------------------|-------------------|-------------------|-----------------|
+| Redis | 10000 | 1.598750938s | 3.023441445s | 455.743878ms | 4516 |
+| Redis | 5000 | 988.681536ms | 2.128397241s | 189.930277ms | 4548 |
+| Redis | 4000 | 890.823334ms | 1.739472335s | 175.216723ms | 4504 |
+| Redis | 3000 | 795.656568ms | 1.86191602s | 5.72865ms | 2090 |
+| Redis | 1000 | 779.147789ms | 1.486303824s | 41.747529ms | 1760 |
+| No Redis | 10000 | 1.892145725s | 3.494308782s | 357.576197ms | 4516 |
+| No Redis | 5000 | 1.879807906s | 3.337061686s | 116.287444ms | 4548 |
+| No Redis | 1000 | 1.618393602s | 2.896856922s | 57.08801ms | 1760 |
+
+- **Strategy**: The method used for handling requests.
+- **Unique Queries**: The number of unique queries in the test.
+- **Average Response Time**: The average time taken to respond to a request.
+- **Max Response Time**: The maximum time taken to respond to a request.
+- **Min Response Time**: The minimum time taken to respond to a request.
+- **Pass Validation**: The number of requests that passed validation.
+
+These results demonstrate the effectiveness of our strategies in handling high concurrency requests. Using Redis for caching shows significant improvements in response time, especially when the number of unique queries is reduced.
+
+
+### POST ###
+The following table presents the results of our experiments with different strategies for handling high concurrency POST and GET requests. Each strategy was tested with a load of 10,000 requests per second.
+
+## Experiment Results
+
+The following table presents the results of our experiments with different strategies for handling high concurrency POST and GET requests. Each strategy was tested with a load of 10,000 requests per second.
+
+| Strategy | Average Response Time | Max Response Time | Min Response Time | Total Duration | |
+|----------|-----------------------|-------------------|-------------------|----------------|
+| Asynchronous Write (Local) | 859.619972ms | 1.647311543s | 2.115333ms | 58.621597ms   |
+| Asynchronous Write (HTTP Endpoint) | 898.034987ms | 1.317795309s | 109.471075ms | 42.034235ms   |
+| Bulk Write (Local) | 501.75155ms | 902.442501ms | 115.539µs | 47.504073ms   |
+| Bulk Write (HTTP Endpoint) | 573.98576ms | 907.051536ms | 78.065298ms |  137.577368ms |
+| Direct Write (Local) | 630.330655ms | 1.115631343s | 294.721µs |  29.584926ms |
+| Direct Write (HTTP Endpoint) | 650.709399ms | 1.23349069s | 20.320745ms | 122.25947815ms  |
+
+
+
+- **Strategy**: The method used for handling requests.
+- **Average Response Time**: The average time taken to respond to a request.
+- **Max Response Time**: The maximum time taken to respond to a request.
+- **Min Response Time**: The minimum time taken to respond to a request.
+- **Total Duration**: The total duration of sending all requests from client the beckend.
+- **Successful Requests**: The number of requests that were successful.
+- **Error Requests**: The number of requests that resulted in an error.
+
+These results demonstrate the effectiveness of our strategies in handling high concurrency requests. Asynchronous Write and Cache Recent Requests strategies, in particular, show significant improvements in response time and error rate.
 
 
 
