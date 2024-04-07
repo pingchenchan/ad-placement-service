@@ -82,7 +82,7 @@ The following table presents the results of our experiments with different strat
 
 The following table presents the results of our experiments with different strategies for handling high concurrency POST and GET requests. Each strategy was tested with a load of 10,000 requests per second.
 
-| Strategy | Average Response Time | Max Response Time | Min Response Time | Total Duration | |
+| Strategy | Average Response Time | Max Response Time | Min Response Time | Total Duration | 
 |----------|-----------------------|-------------------|-------------------|----------------|
 | Asynchronous Write (Local) | 859.619972ms | 1.647311543s | 2.115333ms | 58.621597ms   |
 | Asynchronous Write (HTTP Endpoint) | 898.034987ms | 1.317795309s | 109.471075ms | 42.034235ms   |
