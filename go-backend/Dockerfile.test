@@ -10,11 +10,14 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -v -o app
 
 FROM builder as tester
-
-CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_Concurrency' > /app/tests/TestCreateAd_Concurrency.txt"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_AsyncWrite_HTTP_Endpoint_Concurrency' > /app/tests/TestCreateAd_AsyncWrite_HTTP_Endpoint_Concurrency.txt"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_AsyncWrite_Concurrency' > /app/tests/TestCreateAd_AsyncWrite_Concurrency.txt"]
+# CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_Concurrency' > /app/tests/TestCreateAd_Concurrency.txt"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_BulkWrite_Concurrency' > /app/tests/TestCreateAd_BulkWrite_Concurrency.txt"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_HTTP_Endpoint_Concurrency' > /app/tests/TestCreateAd_HTTP_Endpoint_Concurrency.txt"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_BulkWrite_HTTP_Endpoint_Concurrency' > /app/tests/TestCreateAd_BulkWrite_HTTP_Endpoint_Concurrency.txt"]
+
+
 # CMD ["sh", "-c", "go test -v -cover -run 'TestCreate10000Ad' > /app/tests/Create10000Ad_report.txt"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestCreate10000AdHttp' > /app/tests/Create10000AdHttp_report.txt"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestGet10000AdHttp' > /app/tests/TestGet10000AdHttp_report.txt"]
@@ -22,7 +25,6 @@ CMD ["sh", "-c", "go test -v -cover -run 'TestCreateAd_Concurrency' > /app/tests
   # CMD ["sh", "-c", "go test -v -cover -run 'TestGet10000AdUnit'"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestGet10000AdHttp'"]
 # CMD ["sh", "-c", "go test -v -cover -run 'TestInitialLoad'"]
-
 
 
 

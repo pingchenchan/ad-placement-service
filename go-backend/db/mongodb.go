@@ -75,51 +75,6 @@ func EnsureCollectionAndIndexes(dbName, collectionName string) (*mongo.Collectio
 func CreateIndexes(collection *mongo.Collection) error {
 	ctx := context.Background()
 
-	// // Create index for Age
-	// ageIndexModel := mongo.IndexModel{
-	// 	Keys: bson.D{
-	// 		{Key: "condition.ageStart", Value: 1},
-	// 		{Key: "condition.ageEnd", Value: 1},
-	// 	},
-	// }
-	// _, err := collection.Indexes().CreateOne(ctx, ageIndexModel)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Create index for Gender
-	// genderIndexModel := mongo.IndexModel{
-	// 	Keys: bson.D{
-	// 		{Key: "condition.gender", Value: int32(1)},
-	// 	},
-	// }
-	// _, err = collection.Indexes().CreateOne(ctx, genderIndexModel)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Create index for Country
-	// countryIndexModel := mongo.IndexModel{
-	// 	Keys: bson.D{
-	// 		{Key: "condition.country", Value: 1},
-	// 	},
-	// }
-	// _, err = collection.Indexes().CreateOne(ctx, countryIndexModel)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Create index for Platform
-	// platformIndexModel := mongo.IndexModel{
-	// 	Keys: bson.D{
-	// 		{Key: "condition.platform", Value: int32(1)},
-	// 	},
-	// }
-	// _, err = collection.Indexes().CreateOne(ctx, platformIndexModel)
-	// if err != nil {
-	// 	return err
-	// }
-
 	compoundIndexModel := mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "startAt", Value: 1},

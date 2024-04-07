@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"sync/atomic"
 
@@ -31,7 +32,7 @@ var adChannel = make(chan AdWithCtx, 10000)
 
 // var adChannel = make(chan models.Ad, 10000)
 
-func init() {
+func StartAdHandler() {
 	// Start a new goroutine
 	go func() {
 		// Create a ticker that fires every 0.3 seconds
@@ -44,12 +45,19 @@ func init() {
 			select {
 			case <-ticker.C:
 				// Every 0.3 seconds, write all Ad objects in the slice to the database
+				ctx := context.Background()
+				lenAds, errAds := db.Redis.LLen(ctx, "ads").Result()
+				if errAds != nil {
+					log.Printf("Failed to get length of ads: %v", errAds)
+					continue
+			}
+				if lenAds > 0 {
+					go writeBulkAdsFromRedix()
+				}
 				if len(ads) > 0 {
-
 					go writeBulkAds(ads)
 					// Clear the slice
 					ads = make([]AdWithCtx, 0)
-
 				}
 			case adWithCtx := <-adChannel:
 				// When a new Ad object is received, add it to the slice
@@ -85,6 +93,42 @@ func CreateAd(c *gin.Context, countryCode map[string]bool) {
 
     c.Status(http.StatusCreated)
 }
+
+func CreateAsyncAd(c *gin.Context, countryCode map[string]bool) {
+    var ad models.Ad
+
+    // Bind the POST data to the 'ad' variable
+    if err := c.ShouldBindJSON(&ad); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    valid, errMsg := models.ValidateAd(ad, countryCode)
+    if !valid {
+        c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+        return
+    }
+
+	// Convert the ad to JSON
+	adJson, err := json.Marshal(ad)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error converting ad to JSON"})
+		return
+	}
+
+    // Push the ad to a Redis list
+	ctx := context.Background()
+	err = db.Redis.RPush(ctx, "ads", adJson).Err()
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error pushing ad to Redis"})
+        return
+    }
+
+
+    c.Status(http.StatusCreated)
+}
+
+
 func CreateBulkAd(c *gin.Context, countryCode map[string]bool) {
 	var ad models.Ad
 
@@ -141,7 +185,73 @@ func writeBulkAds(adsWithCtx []AdWithCtx) {
 			adWithCtx.Done()
 		}
 	}
-	fmt.Printf("Made %v BulkAds in %v with result%v\n", len(adsWithCtx), duration, result)
+	fmt.Printf("Made %v Bulk Ads in %v with result%v\n", len(adsWithCtx), duration, result)
+}
+func redixPopAllAds() ([]string, error) {
+    ctx := context.Background()
+
+    // Start a new transaction
+    pipe := db.Redis.TxPipeline()
+
+    // Get all elements from the list
+    lrange := pipe.LRange(ctx, "ads", 0, -1)
+
+    // Remove all elements from the list
+    pipe.LTrim(ctx, "ads", 1, 0)
+
+    // Execute the transaction
+    _, err := pipe.Exec(ctx)
+    if err != nil {
+        return nil, err
+    }
+
+    // Return the results
+    return lrange.Val(), nil
+}
+func writeBulkAdsFromRedix(){
+	// Read data from Redis
+	start := time.Now()
+	ctx := context.Background()
+	adsJson, err := redixPopAllAds()
+	if err != nil {
+		log.Printf("Failed to read from Redis: %v", err)
+		return
+	}
+	// Unmarshal the data
+    var ads []models.Ad
+    for _, adJson := range adsJson {
+        var ad models.Ad
+        err = json.Unmarshal([]byte(adJson), &ad)
+        if err != nil {
+            log.Printf("Failed to unmarshal ad: %v", err)
+            return
+        }
+        ads = append(ads, ad)
+    }
+    // Try to write the data to MongoDB
+	for i := 0; i < 3; i++ {
+		models := make([]mongo.WriteModel, len(ads))
+		for i, ad := range ads {
+			models[i] = mongo.NewInsertOneModel().SetDocument(ad)
+		}
+	
+		collection := db.DB.Database("advertising").Collection("ads")
+		duration := time.Since(start)
+		result, err := collection.BulkWrite(context.Background(), models)
+		fmt.Printf("Made %v Bulk Ads in %v with result%v\n", len(ads), duration, result)
+		if err == nil {
+			return
+		}
+		
+		// If the write operation failed, use exponential backoff
+		time.Sleep(time.Second * time.Duration(math.Pow(2, float64(i))))
+	}
+
+    // If we've failed to write the data to MongoDB three times, push it back to failAds list in Redis
+    err = db.Redis.RPush(ctx, "failAds", adsJson).Err()
+    if err != nil {
+        log.Printf("Failed to write back to Redis: %v", err)
+    }
 }
 
 func GetAd(c *gin.Context) {
@@ -179,7 +289,6 @@ func GetAdsWRedis(c *gin.Context) {
 		c.JSON(http.StatusOK, ads)
 	}else {
         // The result was in Redis, we can return it directly
-		//log the result is get from redis
         var ads []*models.Ad
         json.Unmarshal([]byte(result), &ads)
         c.JSON(http.StatusOK, ads)

@@ -31,7 +31,7 @@ func GenerateAds(numbers int) []models.Ad {
 	genders := []string{"M", "F", ""}
 	countries := []string{"TW","JP","CN","CA", "BE", "BZ", "IO","BG","CM","NL",""}
 	platforms := []string{"android", "ios", "web", ""}
-	ages := []int{-1, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90}
+	ages := []int{-1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90}
 
 	rand.Seed(time.Now().UnixNano())
 	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
