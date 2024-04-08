@@ -23,17 +23,24 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// AdWithCtx is a structure that holds an Ad, a gin.Context, and a Done function.
 type AdWithCtx struct {
 	Ad   models.Ad
 	Ctx  *gin.Context
 	Done func()
 }
 
-// Create a channel to store Ad objects
+// adChannel is a channel that stores AdWithCtx objects.
 var adChannel = make(chan AdWithCtx, 10000)
 
-// var adChannel = make(chan models.Ad, 10000)
+//if get ads using cache active docs strategy
+var RedisActive bool 
 
+// Create a global cache for parsed ads
+var parsedAdsCache []*models.Ad
+var parsedAdsCacheMutex sync.RWMutex
+
+// StartAdHandler starts a goroutine that periodically writes Ad objects to the database.
 func StartAdHandler() {
 	// Start a new goroutine
 	go func() {
@@ -71,6 +78,7 @@ func StartAdHandler() {
 
 var serverCounter int32
 
+// CreateAd creates a new Ad and inserts it into the database.
 func CreateAd(c *gin.Context, countryCode map[string]bool) {
 	var ad models.Ad
 	err := db.DeleteCache()
@@ -107,6 +115,7 @@ func CreateAd(c *gin.Context, countryCode map[string]bool) {
 	c.Status(http.StatusCreated)
 }
 
+// CreateAsyncAd creates a new Ad and pushes it to a Redis list.
 func CreateAsyncAd(c *gin.Context, countryCode map[string]bool) {
 	var ad models.Ad
 	err := db.DeleteCache()
@@ -143,6 +152,7 @@ func CreateAsyncAd(c *gin.Context, countryCode map[string]bool) {
 	c.Status(http.StatusCreated)
 }
 
+// CreateBulkAd creates a new Ad and adds it to the adChannel.
 func CreateBulkAd(c *gin.Context, countryCode map[string]bool) {
 	var ad models.Ad
 	err := db.DeleteCache()
@@ -179,6 +189,7 @@ func CreateBulkAd(c *gin.Context, countryCode map[string]bool) {
 
 }
 
+// writeBulkAds writes a slice of AdWithCtx objects to the database in bulk.
 func writeBulkAds(adsWithCtx []AdWithCtx) {
 	start := time.Now()
 	models := make([]mongo.WriteModel, len(adsWithCtx))
@@ -219,6 +230,8 @@ func writeBulkAds(adsWithCtx []AdWithCtx) {
 	}
 	fmt.Printf("Made %v Bulk Ads in %v with result%v\n", len(adsWithCtx), duration, result)
 }
+
+// redixPopAllAds gets all elements from the "ads" list in Redis and removes them.
 func redixPopAllAds() ([]string, error) {
 	ctx := context.Background()
 
@@ -240,6 +253,8 @@ func redixPopAllAds() ([]string, error) {
 	// Return the results
 	return lrange.Val(), nil
 }
+
+// writeBulkAdsFromRedix reads Ad objects from Redis and writes them to MongoDB.
 func writeBulkAdsFromRedix() {
 	// Read data from Redis
 	start := time.Now()
@@ -294,11 +309,8 @@ func writeBulkAdsFromRedix() {
 	}
 }
 
-func GetAd(c *gin.Context) {
-	c.String(http.StatusOK, "Hello World")
-}
 
-// GetAds retrieves ads based on the given conditions
+// GetadsRedisStringParams retrieves ads based on the given conditions and caches the results in Redis.
 func GetadsRedisStringParams(c *gin.Context) {
     ctx := context.Background()
     var params models.AdQueryParams
@@ -335,13 +347,9 @@ func GetadsRedisStringParams(c *gin.Context) {
     json.Unmarshal(adsJson, &ads)
     c.JSON(http.StatusOK, ads)
 }
-var serverCounterGet int32
 
-var serverCounterGetErr int32
-var serverCounterGetNoCache int32
-var RedisActive bool
 
-// GetAds retrieves ads based on the given conditions
+// GetAdsWRedisActiveDocs retrieves ads based on the given conditions and ensures that the Redis cache is active.
 func GetAdsWRedisActiveDocs(c *gin.Context) {
 	//	atomic make RedisActive to true
 	RedisActive = true
@@ -366,15 +374,11 @@ func GetAdsWRedisActiveDocs(c *gin.Context) {
 	filteredAds := filterAds(activeAds, params)
 		c.JSON(http.StatusOK, filteredAds)
 
-		// Logging the cache status
-		// log.Print("hit cache :", serverCounterGet)
-		// log.Print("cache error :", serverCounterGetErr)
-		// log.Print("no cache :", serverCounterGetNoCache)
 }
 
-// Create a global cache for parsed ads
-var parsedAdsCache []*models.Ad
-var parsedAdsCacheMutex sync.RWMutex
+
+
+// getActiveAds retrieves active ads either from the cache or from the database if the cache is empty.
 func getActiveAds(ctx context.Context) ([]*models.Ad, error)  {
 
 	// Try to get the parsed ads from the cache
@@ -390,13 +394,11 @@ func getActiveAds(ctx context.Context) ([]*models.Ad, error)  {
 
 	activeAds, err := db.Redis.Get(ctx, "activeAds").Bytes()
 	if err != nil && err != redis.Nil {
-		atomic.AddInt32(&serverCounterGetErr, 1)
 		log.Print("Error while retrieving ads from cache: ", err)
 		return nil, err
 	}
 
     if err == redis.Nil {
-		atomic.AddInt32(&serverCounterGetNoCache, 1)
 		log.Print("Error while err == redis.Nil : ", err)
 		// Key does not exist, proceed with fetching from DB and caching
 		collection := db.DB.Database("advertising").Collection("ads")
@@ -427,7 +429,7 @@ func getActiveAds(ctx context.Context) ([]*models.Ad, error)  {
         return nil, err
     }
 
-	atomic.AddInt32(&serverCounterGet, 1)
+
     // Save the parsed ads to the cache
     parsedAdsCacheMutex.Lock()
     parsedAdsCache = UnmarshalAds
@@ -436,8 +438,8 @@ func getActiveAds(ctx context.Context) ([]*models.Ad, error)  {
     return UnmarshalAds, nil
 }
 
+// GetAds retrieves ads based on the given conditions from the database.
 func GetAds(c *gin.Context) {
-
 	var params models.AdQueryParams
 	if err := c.ShouldBindQuery(&params); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -458,6 +460,7 @@ func GetAds(c *gin.Context) {
 
 }
 
+// queryAds queries the database for ads based on the given conditions.
 func queryAds(collection *mongo.Collection, offset, limit int, age int, gender, country, platform string) ([]*models.Ad, error) {
 	// Build the query
 	query := bson.D{}
@@ -503,6 +506,7 @@ func queryAds(collection *mongo.Collection, offset, limit int, age int, gender, 
 	return results, nil
 }
 
+// filterAds filters the given ads based on the given conditions.
 func filterAds(ads []*models.Ad, p models.AdQueryParams) []*models.Ad {
     filteredAds := []*models.Ad{}
 
@@ -529,6 +533,7 @@ func filterAds(ads []*models.Ad, p models.AdQueryParams) []*models.Ad {
     return filteredAds
 }
 
+// contains checks if a slice contains a specific item.
 func contains(slice []string, item string) bool {
     for _, a := range slice {
         if a == item {
@@ -538,6 +543,7 @@ func contains(slice []string, item string) bool {
     return false
 }
 
+// addAdToCache adds a new ad to the cache.
 func addAdToCache(ad *models.Ad) error {
     // Add the new ad to the parsedAdsCache
     parsedAdsCacheMutex.Lock()

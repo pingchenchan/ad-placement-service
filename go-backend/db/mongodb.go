@@ -14,6 +14,7 @@ import (
 
 var DB *mongo.Client
 
+// ConnectMongoDB connects to MongoDB and stores the client connection in the global variable DB.
 func ConnectMongoDB(uri string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -31,6 +32,8 @@ func ConnectMongoDB(uri string) error {
 	DB = client
 	return nil
 }
+
+// DropDatabaseAndCollection drops the specified database and collection.
 func DropDatabaseAndCollection(dbName, collectionName string) error {
     ctx := context.Background()
 
@@ -49,6 +52,8 @@ func DropDatabaseAndCollection(dbName, collectionName string) error {
  	log.Print("successfullly dropped database and collection")
     return nil
 }
+
+// EnsureCollectionAndIndexes ensures the specified collection exists and creates indexes for it.
 func EnsureCollectionAndIndexes(dbName, collectionName string) (*mongo.Collection, error) {
 	ctx := context.Background()
 
@@ -72,6 +77,7 @@ func EnsureCollectionAndIndexes(dbName, collectionName string) (*mongo.Collectio
 	return collection, nil
 }
 
+// CreateIndexes creates indexes for the specified collection.
 func CreateIndexes(collection *mongo.Collection) error {
 	ctx := context.Background()
 

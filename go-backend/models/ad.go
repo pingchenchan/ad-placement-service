@@ -25,6 +25,7 @@ type Condition struct {
     Platform []string  `json:"platform,omitempty" bson:"platform,omitempty" binding:"omitempty,dive,oneof=android ios web"`
 }
 
+// AdQueryParams represents the query parameters for fetching ads
 type AdQueryParams struct {
     Offset   int    `form:"offset"`
     Limit    int    `form:"limit"`
@@ -65,6 +66,7 @@ func LoadCountryCodes(path string) (map[string]bool, error) {
     return v, nil
 }
 
+// ValidateCountry checks if the countries in the ad's conditions are valid
 func ValidateCountry(ad Ad, countryCode map[string]bool) bool {
     for _, condition := range ad.Conditions {
         if condition.Country != nil {
@@ -80,6 +82,7 @@ func ValidateCountry(ad Ad, countryCode map[string]bool) bool {
     return true
 }
 
+// ValidateAge checks if the age range in the ad's conditions is valid
 func ValidateAge(ad Ad) bool { //Age, min=1,max=100
     for _, condition := range ad.Conditions {
         if condition.AgeStart != nil && condition.AgeEnd != nil {
@@ -94,6 +97,7 @@ func ValidateAge(ad Ad) bool { //Age, min=1,max=100
     return true
 }
 
+// ValidateGender checks if the gender in the ad's conditions is valid
 func ValidateGender(ad Ad) bool { //Gender must be M, F or empty
     for _, condition := range ad.Conditions {
         if condition.Gender != nil {
@@ -106,7 +110,7 @@ func ValidateGender(ad Ad) bool { //Gender must be M, F or empty
     return true
 }
 
-
+// ValidatePlatform checks if the platforms in the ad's conditions are valid
 func ValidatePlatform(ad Ad) bool { //Platform must be android, ios, or web
     
     validPlatforms := map[string]bool{
@@ -124,6 +128,7 @@ func ValidatePlatform(ad Ad) bool { //Platform must be android, ios, or web
     return true
 }
 
+// ValidateDates checks if the start and end dates of the ad are valid
 func ValidateDates(ad Ad) bool {
     if ad.StartAt.IsZero() || ad.EndAt.IsZero() {
         log.Printf("Invalid date range 1, startAt: %v, endAt: %v", ad.StartAt, ad.EndAt)
@@ -136,6 +141,7 @@ func ValidateDates(ad Ad) bool {
     return true
 }
 
+// ValidateAd validates the ad's conditions and dates
 func ValidateAd(ad Ad, countryCode map[string]bool) (bool, string) {
     if !ValidateDates(ad) {
         return false, "Invalid date range"

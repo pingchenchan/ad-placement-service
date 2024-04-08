@@ -7,7 +7,7 @@ import (
 
 var Redis *redis.Client
 
-
+// ConnectRedis connects to a Redis instance using the provided URI and stores the client connection in the global variable Redis.
 func ConnectRedis(uri string) ( error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     uri,
@@ -27,11 +27,13 @@ func ConnectRedis(uri string) ( error) {
 	return  nil
 }
 
+// ClearRedis clears all keys in the current database using the FLUSHALL command.
 func ClearRedis() error {
 	ctx := context.Background()
 	return Redis.FlushAll(ctx).Err()
 }
 
+// DeleteCache deletes the key "cacheStringParams" from the Redis database.
 func DeleteCache() error {
     ctx := context.Background()
 	return Redis.Del(ctx, "cacheStringParams").Err()

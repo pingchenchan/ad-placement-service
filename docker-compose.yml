@@ -11,13 +11,6 @@ services:
       - "27017:27017"
     networks:
       - MONGO
-    # volumes:
-    #   - type: volume
-    #     source: MONGO_DATA
-    #     target: /data/db
-    #   - type: volume
-    #     source: MONGO_CONFIG
-    #     target: /data/configdb
   mongo-express:
     image: mongo-express:latest
     container_name: mongo-express
@@ -81,8 +74,3 @@ networks:
   MONGO:
     name: MONGO
 
-# volumes:
-#   MONGO_DATA:
-#     name: MONGO_DATA
-#   MONGO_CONFIG:
-#     name: MONGO_CONFIG

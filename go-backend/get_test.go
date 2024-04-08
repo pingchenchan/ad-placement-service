@@ -23,8 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type AdsResponse []models.Ad
+// AdsResponse represents a slice of Ad models.
+type AdsResponse []models.Ad 
+var numUniqueQueries = 5000
 
+// GenerateAds generates a specified number of ads with random conditions.
 func GenerateAds(numbers int) []models.Ad {
 	ads := make([]models.Ad, numbers)
 	now := time.Now()
@@ -127,6 +130,7 @@ func getAdFunction(endpoint string, query string) (*http.Response, error) {
 	return client.Do(req)
 }
 
+// TestInitialDB tests the initial state of the database.
 func TestInitialDB(t *testing.T) {
 	err := db.DropDatabaseAndCollection("advertising", "ads")
 	if err != nil {
@@ -139,6 +143,7 @@ func TestInitialDB(t *testing.T) {
 
 }
 
+// TestInitialLoad tests the initial loading of ads into the database.
 func TestInitialLoad(t *testing.T) {
 	err := db.DropDatabaseAndCollection("advertising", "ads")
 	if err != nil {
@@ -165,12 +170,16 @@ func TestInitialLoad(t *testing.T) {
 	}
 	log.Print("successfullly loaded 3000 ads")
 }
-var numUniqueQueries = 5000
+
+
+
+// TestGetAd_HTTP_Endpoint_Concurrency tests the concurrency of the GET ad HTTP endpoint.
 func TestGetAd_HTTP_Endpoint_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
 	Get10000AdHTTP(t, "http://go-backend:8080/ads", numUniqueQueries)
 
 }
+// TestGetAd_CacheQuery_HTTP_Endpoint_Concurrency tests the concurrency of the GET ad HTTP endpoint with cache query.
 func TestGetAd_CacheQuery_HTTP_Endpoint_Concurrency(t *testing.T) {
 	// TestInitialLoad(t)
 	err := db.ClearRedis()
@@ -180,6 +189,7 @@ func TestGetAd_CacheQuery_HTTP_Endpoint_Concurrency(t *testing.T) {
 	Get10000AdHTTP(t, "http://go-backend:8080/adsRedisStringParams",numUniqueQueries)
 }
 
+// TestGetAd_CacheActiveAd_HTTP_Endpoint_Concurrency tests the concurrency of the GET ad HTTP endpoint with cache active ad.
 func TestGetAd_CacheActiveAd_HTTP_Endpoint_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
 	ctx := context.Background()
@@ -190,6 +200,7 @@ func TestGetAd_CacheActiveAd_HTTP_Endpoint_Concurrency(t *testing.T) {
 	Get10000AdHTTP(t, "http://go-backend:8080/adsRedisActiveDocs", numUniqueQueries)
 
 }
+// TestGetAd_Concurrency tests the concurrency of the GET ad.
 func TestGetAd_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
 	gin.SetMode(gin.ReleaseMode)
@@ -204,6 +215,7 @@ func TestGetAd_Concurrency(t *testing.T) {
 
 	performTest(t, endpoint, numUniqueQueries, getAdFunction)
 }
+// TestGetAd_CacheQuery_Concurrency tests the concurrency of the GET ad with cache query.
 func TestGetAd_CacheQuery_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
 	err := db.ClearRedis()
@@ -222,6 +234,7 @@ func TestGetAd_CacheQuery_Concurrency(t *testing.T) {
 	Get10000AdHTTP(t, endpoint, numUniqueQueries)
 }
 
+// TestGetAd_CacheActiveAd_Concurrency tests the concurrency of the GET ad with cache active ad.
 func TestGetAd_CacheActiveAd_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
 	ctx := context.Background()
@@ -242,6 +255,7 @@ func TestGetAd_CacheActiveAd_Concurrency(t *testing.T) {
 
 }
 
+// genRandomQuery generates a specified number of random ad queries.
 func genRandomQuery(numQueries int) []models.AdQueryParams {
 	// Create slices for the enum parameters
 	genders := []string{"M", "F", ""}
@@ -280,6 +294,8 @@ func genRandomQuery(numQueries int) []models.AdQueryParams {
 
 	return queries
 }
+
+// checkQueriesUnique checks if all the queries in the provided slice are unique.
 func checkQueriesUnique(queries []models.AdQueryParams) bool {
 	// Create a map to track the unique queries
 	uniqueQueries := make(map[models.AdQueryParams]bool)
@@ -303,6 +319,7 @@ func checkQueriesUnique(queries []models.AdQueryParams) bool {
 	return isUnique
 }
 
+// performTest performs a test on the specified endpoint with a specified number of queries.
 func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction func(string, string) (*http.Response, error)) {
 	//Get 10000 request with same query
 	var TEST_NUMBER = 10000
@@ -427,10 +444,12 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 }
 
 
+// Get10000AdHTTP performs a test on the specified endpoint with 10000 queries.
 func Get10000AdHTTP(t *testing.T, endpoint string, numUniqueQueries int) {
 	performTest(t, endpoint, numUniqueQueries, getAdFunction)
 }
 
+// validateAd validates if the ad's conditions match the query parameters and if the ad's start and end times are within the current time.
 func validateAd(ad *models.Ad, p models.AdQueryParams) bool {
 	// Check if the ad's conditions match the query parameters
 	for _, condition := range ad.Conditions {
@@ -457,6 +476,7 @@ func validateAd(ad *models.Ad, p models.AdQueryParams) bool {
 	return true
 }
 
+// contains checks if a slice contains a specific item.
 func contains(slice []string, item string) bool {
 	for _, a := range slice {
 		if a == item {

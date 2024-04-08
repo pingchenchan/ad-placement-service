@@ -105,7 +105,7 @@ func logRequestStats(t *testing.T, timeChannel <-chan time.Duration, endpoint st
 	t.Logf("Total duration of requests: %v", time.Since(start))
 }
 
-// TestCreate10000Ad tests the creation of 10000 individual ads.
+// TestCreateAd_Concurrency tests the creation of 10000 individual ads.
 func TestCreateAd_Concurrency(t *testing.T) {
 	TestInitialDB(t)
 	countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
@@ -117,7 +117,7 @@ func TestCreateAd_Concurrency(t *testing.T) {
 	}, "/ads")
 }
 
-// TestCreate10000BulkAd tests the bulk creation of 10000 ads.
+// TestCreateAd_BulkWrite_Concurrency tests the bulk creation of 10000 ads.
 func TestCreateAd_BulkWrite_Concurrency(t *testing.T) {
 	TestInitialDB(t)
 	countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
@@ -129,6 +129,7 @@ func TestCreateAd_BulkWrite_Concurrency(t *testing.T) {
 	}, "/adsBulk")
 }
 
+// TestCreateAd_AsyncWrite_Concurrency tests the asynchronous creation of 10000 ads.
 func TestCreateAd_AsyncWrite_Concurrency(t *testing.T) {
 	TestInitialDB(t)
 	countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
@@ -140,18 +141,19 @@ func TestCreateAd_AsyncWrite_Concurrency(t *testing.T) {
 	}, "/adsAsync")
 }
 
-// TestCreate10000AdHttp tests the HTTP endpoint for creating 10000 individual ads.
+// TestCreateAd_HTTP_Endpoint_Concurrency tests the HTTP endpoint for creating 10000 individual ads.
 func TestCreateAd_HTTP_Endpoint_Concurrency(t *testing.T) {
 	TestInitialDB(t)
 	create10000Ad(t, "http://go-backend:8080/ads")
 }
 
-// TestCreate10000BulkAdHttp tests the HTTP endpoint for bulk creating 10000 ads.
+// TestCreateAd_BulkWrite_HTTP_Endpoint_Concurrency tests the HTTP endpoint for bulk creating 10000 ads.
 func TestCreateAd_BulkWrite_HTTP_Endpoint_Concurrency(t *testing.T) {
 	TestInitialDB(t)
 	create10000Ad(t, "http://go-backend:8080/adsBulk")
 }
 
+// TestCreateAd_AsyncWrite_HTTP_Endpoint_Concurrency tests the HTTP endpoint for asynchronously creating 10000 ads.
 func TestCreateAd_AsyncWrite_HTTP_Endpoint_Concurrency(t *testing.T) {
 	TestInitialDB(t)
 	create10000Ad(t, "http://go-backend:8080/adsAsync")
