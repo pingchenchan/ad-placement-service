@@ -2,7 +2,7 @@
 
 
 ## Introduction
-在這個項目中，我開發了一個簡單的廣告投放服務。這個服務提供兩個API：一個用於生成廣告，另一個用於列出廣告。
+在這個項目中，我使用golang, Gin, MongoDB, Redis, Docker開發了一個高並發的廣告投放服務，能夠處理每10,000筆的請求。這個服務提供兩個API：一個POST用於生成廣告，另一個GET用於列出廣告，對於這兩個API，我各自實現三種策略以達到更高的性能。
 
 ## Features
 1. **API**
@@ -12,9 +12,7 @@
    - 為了提升GET性能，我在MongoDB中使用了 **compound index for our MongoDB**. 複合索引的順序是"startAt"、"endAt"、"ageStart"、"ageEnd"、"country"、"gender"、"platform"。這種順序非常高效，因為查詢時我們首先按時間過濾以找到活躍的廣告。年齡也是一個高選擇性的索引，其次是國家、性別和平台。
    - 對於POST請求，考慮到性能和數據持久性，我實現了三種策略：第一種是最基本沒有任何優化的 **直接寫入**,第二種使用 **發布者/訂閱者**進行批次寫入, 以及擁有最高即時回應性能的 **異步寫入**策略。
    - 對於GET請求，我實現了三種策略： 第一種是最基本沒有任何優化的 **直接從資料庫獲取** ，第二種是使用Redis作為快取，**快取鍵值為查詢字串**參數。第三種同樣使用Redis作為快取，**快取內容是全部當前活躍廣告**，為了減少序列化和反序列的操作時間，加上活躍的廣告筆數不多，因此我使用了L1/L2 Caching來進一步提升性能。
-3. **Experimentation with Different Strategies**
-   - I've implemented unit tests and integration tests for my different strategies of POST and GET APIs.
-4. **查詢驗證**
+3. **查詢驗證**
    - 對於寫入一個新的廣告，條件是可選的。如果提供了條件，我的驗證器將確保條件是有效的。從資料庫寫入和讀取出來的資料是符合條件的。
 
 ## 資料庫配置
