@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,11 +26,11 @@ import (
 type AdsResponse []models.Ad
 
 func GenerateAds(numbers int) []models.Ad {
-	ads := make([]models.Ad,numbers)
+	ads := make([]models.Ad, numbers)
 	now := time.Now()
 
 	genders := []string{"M", "F", ""}
-	countries := []string{"TW","JP","CN","CA", "BE", "BZ", "IO","BG","CM","NL",""}
+	countries := []string{"TW", "JP", "CN", "CA", "BE", "BZ", "IO", "BG", "CM", "NL", ""}
 	platforms := []string{"android", "ios", "web", ""}
 	ages := []int{-1, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90}
 
@@ -126,6 +127,18 @@ func getAdFunction(endpoint string, query string) (*http.Response, error) {
 	return client.Do(req)
 }
 
+func TestInitialDB(t *testing.T) {
+	err := db.DropDatabaseAndCollection("advertising", "ads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.EnsureCollectionAndIndexes("advertising", "ads")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 func TestInitialLoad(t *testing.T) {
 	err := db.DropDatabaseAndCollection("advertising", "ads")
 	if err != nil {
@@ -152,107 +165,146 @@ func TestInitialLoad(t *testing.T) {
 	}
 	log.Print("successfullly loaded 3000 ads")
 }
-
-func TestGet10000AdHttp(t *testing.T) {
+var numUniqueQueries = 5000
+func TestGetAd_HTTP_Endpoint_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
-	Get10000AdHTTP(t, "http://go-backend:8080/ads", 1000)
+	Get10000AdHTTP(t, "http://go-backend:8080/ads", numUniqueQueries)
 
 }
-func TestGet10000AdRedixHttp(t *testing.T) {
-	TestInitialLoad(t )
-	err:=db.ClearRedis()
+func TestGetAd_CacheQuery_HTTP_Endpoint_Concurrency(t *testing.T) {
+	// TestInitialLoad(t)
+	err := db.ClearRedis()
 	if err != nil {
 		t.Fatal(err)
 	}
-	Get10000AdHTTP(t, "http://go-backend:8080/adsRedix", 5000)
+	Get10000AdHTTP(t, "http://go-backend:8080/adsRedisStringParams",numUniqueQueries)
 }
 
-func TestGet10000AdUnit(t *testing.T) {
-// TestInitialLoad(t )
+func TestGetAd_CacheActiveAd_HTTP_Endpoint_Concurrency(t *testing.T) {
+	// TestInitialLoad(t )
+	ctx := context.Background()
+	err := db.Redis.Del(ctx, "activeAds").Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+	Get10000AdHTTP(t, "http://go-backend:8080/adsRedisActiveDocs", numUniqueQueries)
+
+}
+func TestGetAd_Concurrency(t *testing.T) {
+	// TestInitialLoad(t )
 	gin.SetMode(gin.ReleaseMode)
-    router := gin.Default()
-    router.GET("/adsUnit",  handlers.GetAds)
+	router := gin.Default()
+	router.GET("/adsUnit", handlers.GetAds)
 
 	// Create a test server
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
-	// endpoint := ts.URL + "/adsUnit"
+	endpoint := ts.URL + "/adsUnit"
 
-	performTest(t,"http://go-backend:8080/adsUnit", 10000, getAdFunction)
+	performTest(t, endpoint, numUniqueQueries, getAdFunction)
 }
-func TestGet10000AdRedixUnit(t *testing.T) {
+func TestGetAd_CacheQuery_Concurrency(t *testing.T) {
 	// TestInitialLoad(t )
-	err:=db.ClearRedis()
+	err := db.ClearRedis()
 	if err != nil {
 		t.Fatal(err)
 	}
-	Get10000AdHTTP(t, "http://go-backend:8080/adsRedix", 5000)
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.Default()
+	router.GET("/adsUnit", handlers.GetadsRedisStringParams)
+
+	// Create a test server
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	endpoint := ts.URL + "/adsUnit"
+	Get10000AdHTTP(t, endpoint, numUniqueQueries)
+}
+
+func TestGetAd_CacheActiveAd_Concurrency(t *testing.T) {
+	// TestInitialLoad(t )
+	ctx := context.Background()
+	err := db.Redis.Del(ctx, "activeAds").Err()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.Default()
+	router.GET("/adsUnit", handlers.GetadsRedisStringParams)
+
+	// Create a test server
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	endpoint := ts.URL + "/adsUnit"
+	Get10000AdHTTP(t, endpoint , numUniqueQueries)
+
 }
 
 func genRandomQuery(numQueries int) []models.AdQueryParams {
-    // Create slices for the enum parameters
-    genders := []string{"M", "F", ""}
-    countries := []string{"TW","JP","CN","CA", "BE", "BZ", "IO","BG","CM","NL",""}
-    platforms := []string{"android", "ios", "web",""}
+	// Create slices for the enum parameters
+	genders := []string{"M", "F", ""}
+	countries := []string{"TW", "JP", "CN", "CA", "BE", "BZ", "IO", "BG", "CM", "NL", ""}
+	platforms := []string{"android", "ios", "web", ""}
 
-    // Create a slice to hold the different queries
-    queries := make([]models.AdQueryParams, 0, numQueries)
+	// Create a slice to hold the different queries
+	queries := make([]models.AdQueryParams, 0, numQueries)
 
-    // Generate the different queries
-    for _, gender := range genders {
-        for _, country := range countries {
-            for _, platform := range platforms {
-                for offset := 0; offset < 5; offset++ {
-                    for limit := 5; limit <= 6; limit++ {
-                        for age := 1; age <= 100; age++ {
-                            if len(queries) < numQueries {
-                                queries = append(queries, models.AdQueryParams{
-                                    Offset:   offset,
-                                    Limit:    limit,
-                                    Age:      age,
-                                    Gender:   gender,
-                                    Country:  country,
-                                    Platform: platform,
-                                })
-                            } else {
-                                // If we have generated enough queries, return them
-                                return queries
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+	// Generate the different queries
+	for _, gender := range genders {
+		for _, country := range countries {
+			for _, platform := range platforms {
+				for offset := 0; offset < 5; offset++ {
+					for limit := 5; limit <= 6; limit++ {
+						for age := 1; age <= 100; age++ {
+							if len(queries) < numQueries {
+								queries = append(queries, models.AdQueryParams{
+									Offset:   offset,
+									Limit:    limit,
+									Age:      age,
+									Gender:   gender,
+									Country:  country,
+									Platform: platform,
+								})
+							} else {
+								// If we have generated enough queries, return them
+								return queries
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
-    return queries
+	return queries
 }
 func checkQueriesUnique(queries []models.AdQueryParams) bool {
-    // Create a map to track the unique queries
-    uniqueQueries := make(map[models.AdQueryParams]bool)
-    isUnique := true
+	// Create a map to track the unique queries
+	uniqueQueries := make(map[models.AdQueryParams]bool)
+	isUnique := true
 
-    // Check each query in the queries slice
-    for _, query := range queries {
-        // If the query is in the uniqueQueries map, set isUnique to false
-        if _, exists := uniqueQueries[query]; exists {
-            isUnique = false
-        }
+	// Check each query in the queries slice
+	for _, query := range queries {
+		// If the query is in the uniqueQueries map, set isUnique to false
+		if _, exists := uniqueQueries[query]; exists {
+			isUnique = false
+		}
 
-        // If the query is not in the uniqueQueries map, add it
-        uniqueQueries[query] = true
-    }
+		// If the query is not in the uniqueQueries map, add it
+		uniqueQueries[query] = true
+	}
 
-    // Print numbers of unique queries
-    fmt.Println("Numbers of unique queries: ", len(uniqueQueries))
+	// Print numbers of unique queries
+	fmt.Println("Numbers of unique queries: ", len(uniqueQueries))
 
-    // Return whether all queries are unique
-    return isUnique
+	// Return whether all queries are unique
+	return isUnique
 }
 
 func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction func(string, string) (*http.Response, error)) {
-    //Get 10000 request with same query
+	//Get 10000 request with same query
 	var TEST_NUMBER = 10000
 
 	// Create a channel to handle errors
@@ -266,7 +318,7 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 
 	// Create a slice to hold the different queries
 	queries := genRandomQuery(numQueries)
-	queriesChannel := make(chan  models.AdQueryParams, TEST_NUMBER)
+	queriesChannel := make(chan models.AdQueryParams, TEST_NUMBER)
 	if checkQueriesUnique(queries) {
 		fmt.Println("All queries are unique")
 	} else {
@@ -274,7 +326,7 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 	}
 	var passValidation int32
 	var failValidation int32
-
+	var firstRequestTime, lastRequestTime time.Time
 	var wg sync.WaitGroup
 	wg.Add(TEST_NUMBER)
 	start := time.Now()
@@ -283,15 +335,21 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 			defer wg.Done()
 
 			// Record the start time of the request
-			p := queries[i % numQueries]//random query
+			p := queries[i%numQueries] //random query
 
 			queriesChannel <- p
 
 			getData := createSampleGetQuery(p)
 
 			startTime := time.Now()
-
+			if i == 0 {
+				firstRequestTime = startTime
+			} else if i == 9999 {
+				lastRequestTime = startTime
+			}
 			resp, err := getAdFunction(endpoint, getData)
+
+			
 
 			// Record the end time of the request and send the duration to the time channel
 			timeChannel <- time.Since(startTime)
@@ -299,6 +357,8 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 			if err != nil {
 				errChannel <- err
 			} else if resp.StatusCode != http.StatusOK {
+				//print error message
+				log.Print("error message:", resp)
 				errChannel <- fmt.Errorf("unexpected status code: got %v want %v", resp.StatusCode, http.StatusOK)
 			} else {
 				var adsResponse AdsResponse
@@ -307,9 +367,10 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 					return
 				}
 
+				
 				//Validate the response
 				for _, ad := range adsResponse {
-
+				
 					if !validateAd(&ad, p) {
 						atomic.AddInt32(&failValidation, 1)
 						errChannel <- fmt.Errorf("ad does not match query parameters: %v", ad)
@@ -319,7 +380,7 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 
 					}
 				}
-
+				// log.Printf("Number of ads Response:%v ", len(adsResponse))
 				successChannel <- struct{}{}
 			}
 		}(i)
@@ -331,7 +392,6 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 	close(successChannel)
 	close(timeChannel)
 	close(queriesChannel)
-
 
 	//trans queriesChannel to slice
 	queriesChannelSlice := make([]models.AdQueryParams, 0)
@@ -345,7 +405,6 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 		fmt.Println("There are duplicate queries")
 	}
 
-
 	t.Logf("")
 	// Check how many errors
 	t.Logf("Numbers of error requests: %v", len(errChannel))
@@ -355,6 +414,7 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 	// Check how many successes
 	t.Logf("Numbers of successful requests: %v", len(successChannel))
 	t.Logf("Numbers of pass validation: %v", passValidation)
+	t.Logf("Time from first to last request: %v", lastRequestTime.Sub(firstRequestTime))
 	// Check if there were any errors
 	for err := range errChannel {
 		if err != nil {
@@ -365,31 +425,25 @@ func performTest(t *testing.T, endpoint string, numQueries int, getAdFunction fu
 	// Calculate the average, max, and min request time
 	logRequestStats(t, timeChannel, endpoint, start)
 }
-func Get10000AdUnit(t *testing.T, numQueries int, handler http.Handler) {
-	// Create a test server
-    ts := httptest.NewServer(handler)
-    defer ts.Close()
 
-    performTest(t, ts.URL, numQueries, getAdFunction)
-}
 
-func Get10000AdHTTP(t *testing.T, endpoint string, numQueries int) {
-    performTest(t, endpoint, numQueries, getAdFunction)
+func Get10000AdHTTP(t *testing.T, endpoint string, numUniqueQueries int) {
+	performTest(t, endpoint, numUniqueQueries, getAdFunction)
 }
 
 func validateAd(ad *models.Ad, p models.AdQueryParams) bool {
 	// Check if the ad's conditions match the query parameters
 	for _, condition := range ad.Conditions {
-		if p.Age != 0 && (*condition.AgeStart > p.Age || *condition.AgeEnd < p.Age) {
+		if  condition.AgeStart != nil && condition.AgeEnd != nil && p.Age != 0 && (*condition.AgeStart > p.Age || *condition.AgeEnd < p.Age) {
 			return false
 		}
-		if p.Gender != "" && *condition.Gender != p.Gender {
+		if  condition.Gender != nil && p.Gender != "" && *condition.Gender != p.Gender {
 			return false
 		}
-		if p.Country != "" && !contains(condition.Country, p.Country) {
+		if condition.Country != nil && p.Country != "" && !contains(condition.Country, p.Country) {
 			return false
 		}
-		if p.Platform != "" && !contains(condition.Platform, p.Platform) {
+		if  condition.Platform != nil && p.Platform != "" && !contains(condition.Platform, p.Platform) {
 			return false
 		}
 	}

@@ -107,6 +107,7 @@ func logRequestStats(t *testing.T, timeChannel <-chan time.Duration, endpoint st
 
 // TestCreate10000Ad tests the creation of 10000 individual ads.
 func TestCreateAd_Concurrency(t *testing.T) {
+	TestInitialDB(t)
 	countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
 	if err != nil {
 		log.Fatalf("Failed to load country codes: %v", err)
@@ -118,6 +119,7 @@ func TestCreateAd_Concurrency(t *testing.T) {
 
 // TestCreate10000BulkAd tests the bulk creation of 10000 ads.
 func TestCreateAd_BulkWrite_Concurrency(t *testing.T) {
+	TestInitialDB(t)
 	countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
 	if err != nil {
 		log.Fatalf("Failed to load country codes: %v", err)
@@ -128,6 +130,7 @@ func TestCreateAd_BulkWrite_Concurrency(t *testing.T) {
 }
 
 func TestCreateAd_AsyncWrite_Concurrency(t *testing.T) {
+	TestInitialDB(t)
 	countryCodeValidator, err := models.LoadCountryCodes("./models/countryCode.json")
 	if err != nil {
 		log.Fatalf("Failed to load country codes: %v", err)
@@ -139,15 +142,18 @@ func TestCreateAd_AsyncWrite_Concurrency(t *testing.T) {
 
 // TestCreate10000AdHttp tests the HTTP endpoint for creating 10000 individual ads.
 func TestCreateAd_HTTP_Endpoint_Concurrency(t *testing.T) {
+	TestInitialDB(t)
 	create10000Ad(t, "http://go-backend:8080/ads")
 }
 
 // TestCreate10000BulkAdHttp tests the HTTP endpoint for bulk creating 10000 ads.
 func TestCreateAd_BulkWrite_HTTP_Endpoint_Concurrency(t *testing.T) {
+	TestInitialDB(t)
 	create10000Ad(t, "http://go-backend:8080/adsBulk")
 }
 
 func TestCreateAd_AsyncWrite_HTTP_Endpoint_Concurrency(t *testing.T) {
+	TestInitialDB(t)
 	create10000Ad(t, "http://go-backend:8080/adsAsync")
 }
 

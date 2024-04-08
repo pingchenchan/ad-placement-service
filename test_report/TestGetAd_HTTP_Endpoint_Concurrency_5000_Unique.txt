@@ -1,0 +1,22 @@
+2024/04/07 23:41:17 successfullly created indexes
+=== RUN   TestGetAd_HTTP_Endpoint_Concurrency
+Numbers of unique queries:  5000
+All queries are unique
+Number of queries:  10000
+Numbers of unique queries:  5000
+There are duplicate queries
+    get_test.go:396: 
+    get_test.go:398: Numbers of error requests: 0
+    get_test.go:399: Numbers of fail validation: 0
+    get_test.go:403: Numbers of successful requests: 10000
+    get_test.go:404: Numbers of pass validation: 4672
+    get_test.go:405: Time from first to last request: 95.462289ms
+    post_test.go:101: Endpoint: http://go-backend:8080/ads
+    post_test.go:102: Average request time: 1.821535228s
+    post_test.go:103: Max request time: 3.484592642s
+    post_test.go:104: Min request time: 305.131451ms
+    post_test.go:105: Total duration of requests: 3.582274944s
+--- PASS: TestGetAd_HTTP_Endpoint_Concurrency (3.58s)
+PASS
+coverage: 24.0% of statements
+ok  	github.com/pingchenchan/ad-placement-service	3.603s

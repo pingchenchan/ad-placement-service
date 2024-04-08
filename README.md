@@ -1,118 +1,162 @@
-# ad-placement-service
+# 廣告投放服務-golang
 
 
 ## Introduction
-In this project, we've developed a straightforward ad placement service. The service offers two APIs: one for generating ads and another for listing ads.
+在這個項目中，我開發了一個簡單的廣告投放服務。這個服務提供兩個API：一個用於生成廣告，另一個用於列出廣告。
 
 ## Features
 1. **API**
-   - Admin API: Offers a POST RESTful API for creating a new ad.
-   - Placement API: Provides a GET RESTful API for listing active ads, defined as ads where the current time (`time.now()`) falls within the "startAt" and "endAt" conditions.
-2. **Strategies for High Performance**
-   - To enhance GET performance, we use a **compound index for our MongoDB**. The compound index order is "startAt", "endAt", "ageStart", "ageEnd", "country", "gender", "platform". This order is highly efficient because when querying, we first filter by time to find the active ad. Age is also a highly selective index, followed by country, gender, and platform.
-   - For POST requests, considering performance and data persistence, I've implemented three strategies: **Direct Write**, **Publisher/Subscriber**, and **Asynchronous Write**. More details are provided in the sections below.
-   - For GET requests, I've implemented **Direct Get** from MongoDB and **Cache Recent Requests** using Redis. More details are provided in the sections below.
+   - Admin API: 提供一個POST RESTful API用於創建新的廣告。
+   - Placement API: 提供一個GET RESTful API用於列出活躍的廣告，定義為當前時間在"startAt"和"endAt"條件之間的廣告。
+2. **高併發策略**
+   - 為了提升GET性能，我在MongoDB中使用了 **compound index for our MongoDB**. 複合索引的順序是"startAt"、"endAt"、"ageStart"、"ageEnd"、"country"、"gender"、"platform"。這種順序非常高效，因為查詢時我們首先按時間過濾以找到活躍的廣告。年齡也是一個高選擇性的索引，其次是國家、性別和平台。
+   - 對於POST請求，考慮到性能和數據持久性，我實現了三種策略：第一種是最基本沒有任何優化的 **直接寫入**,第二種使用 **發布者/訂閱者**進行批次寫入, 以及擁有最高即時回應性能的 **異步寫入**策略。
+   - 對於GET請求，我實現了三種策略： 第一種是最基本沒有任何優化的 **直接從資料庫獲取** ，第二種是使用Redis作為快取，**快取鍵值為查詢字串**參數。第三種同樣使用Redis作為快取，**快取內容是全部當前活躍廣告**，為了減少序列化和反序列的操作時間，加上活躍的廣告筆數不多，因此我使用了L1/L2 Caching來進一步提升性能。
 3. **Experimentation with Different Strategies**
    - I've implemented unit tests and integration tests for my different strategies of POST and GET APIs.
-4. **Query Validation**
-   - For writing a new ad, the conditions are optional. If conditions are provided, my validator will ensure the conditions are valid. If they are not, it will respond with an error.
+4. **查詢驗證**
+   - 對於寫入一個新的廣告，條件是可選的。如果提供了條件，我的驗證器將確保條件是有效的。從資料庫寫入和讀取出來的資料是符合條件的。
+
+## 資料庫配置
+1. **MONGODB**：MongoDB 是一種非關聯性資料庫，適合用於存儲結構變化較大或不完全結構化的數據。對於廣告數據來說，由於每個廣告可能有不同的條件，MongoDB 的彈性模式非常適合此類應用。
+2. **Redis**：Redis 通常用作快取系統，由於其極高的讀寫速度，適用於本系統中快取廣告查詢結果，減少對 MongoDB 的查詢壓力。
 
 
 
-## Post design
 
-This service provides an API for handling high concurrency(10,000 requests per second) POST requests. It uses three different strategies:
 
-1. **Direct Write**: 
-   - Directly write the request data to the database and send a response.
-   - Endpoint is : POST /ads
-3. **Publisher / Subscriber**: 
-   - Push the request data to a channel. Another goroutine periodically checks this channel and writes all data to the database, then sends an HTTP response.
-   - Endpoint is : POST /adsBulk
-4. **Asynchronous Write**: First, write the request data to Redis and send a response to the user. Then, periodically check and write all data from the Redis `ads_list` to the database. The steps are as follows:
-   - Get all ads from `ads_list` and remove them from Redis.
-   - Try to write the data to MongoDB. If the write operation fails, use exponential backoff and retry up to 3 times.
-   - If the write operation still fails after 3 retries, store the data in the Redis `fail_ads` list.
-   - If the write operation is successful, delete these records from Redis.
-   - Asynchronous operation in Redis are atomic, ensuring data consistency even under high concurrency.
-   - Endpoint is : POST /adsAsync
+## Post 設計
+這個服務提供一個API來處理高並發（根據需求是每秒內3,000個請求，平均回應時間少於一秒）的POST請求。它使用了三種不同的策略：
 
+1. **直接寫入(Instant Direct Write)**: 
+   - 將請求資料直接寫入資料庫，隨後立即向用戶發送響應。
+    - 優缺點：
+     - 優點：簡單直接，實現容易，資料一致性高。
+     - 缺點：對於大量請求，可能會導致數據庫壓力過大，影響性能。
+   - API端點: POST /ads
+2. **發布者 / 訂閱者的批次寫入（Publisher / Subscriber with Bulk write）**: 
+   - 基本概念是有一個發布者和一個訂閱者。發布者：負責接收與回應用戶的POST請求，將收到的廣告送到一個通道。訂閱者負責定期從定期檢查(預設為0.1秒)此通道並將所有數據寫入數據庫，待收到資料庫的回應後。發布者會收到完成的通知(使用sync.WaitGroup)並傳送HTTP響應給用戶。
+   - 優缺點：
+     - 優點：可以實現異步處理與**批次寫入**到資料庫，減輕資料庫的即時壓力，提高系統吞吐量。
+     - 缺點：實現較為複雜，若系統突然中斷可能會面臨數據不一致的風險。此外，寫入資料庫的速度會受定時任務間隔的影響。
+   - API端點: POST /adsBulk
+3. **佇列異步寫入 (Queue-based Asynchronous Write)**: 
+   - 首先將請求數據寫入Redis的`ads_list`列表中，完成後即刻回應用戶，然後系統將定期從Redis中提取數據並寫入MongoDB。
+   - 實作細節：
+     - 從Redis`ads_list`列表獲取所有廣告並從Redis中刪除。
+     - 嘗試將數據寫入MongoDB。如果寫入失敗，使用指數退避(exponential backoff)重試，最多重試3次。
+     - 若重試後依然失敗，將資料存至在Redis `fail_ads`列表中，。
+   - 優缺點：
+     - 優點:
+       -  所使用Redis中的異步操作是原子的，即使在高並發下也能保證數據一致性。
+       -  利用Redis的高速緩存特性，可以快速響應用戶請求，提高系統性能。
+       -  同樣使用了資料庫的批次寫入功能，提高系統吞吐量。
+     - 缺點：統複雜度增加，需定期檢查Redis中的數據。若Redis出現問題，可能導致數據丟失。
+   - API端點: POST /adsAsync
 
 
 ## Get Design
-We provide two strategies for handling high concurrency (10,000 requests per second) GET requests:
+提供了三種策略來處理高並發（根據需求是每秒內10,000個請求，平均回應時間少於一秒）的GET請求：
 
-1. **Direct Get**: This strategy directly retrieves the requested data from the database and sends a response.
-
-2. **Cache Recent Requests**: This strategy involves checking if the query key exists in Redis each time a GET request is handled. If it does, the data is retrieved from Redis and sent in the response. If it doesn't, the data is retrieved from MongoDB, stored in Redis for future requests, and then sent in the response.
-
-
-## Experiment Results
-
-### GET ###
-## Experiment Results
-
-The following table presents the results of our experiments with different strategies for handling high concurrency GET requests. Each strategy was tested with a load of 10,000 requests per second.
-
-| Strategy | Unique Queries | Average Response Time | Max Response Time | Min Response Time | Pass Validation |
-|----------|----------------|-----------------------|-------------------|-------------------|-----------------|
-| Redis | 10000 | 1.598750938s | 3.023441445s | 455.743878ms | 4516 |
-| Redis | 5000 | 988.681536ms | 2.128397241s | 189.930277ms | 4548 |
-| Redis | 4000 | 890.823334ms | 1.739472335s | 175.216723ms | 4504 |
-| Redis | 3000 | 795.656568ms | 1.86191602s | 5.72865ms | 2090 |
-| Redis | 1000 | 779.147789ms | 1.486303824s | 41.747529ms | 1760 |
-| No Redis | 10000 | 1.892145725s | 3.494308782s | 357.576197ms | 4516 |
-| No Redis | 5000 | 1.879807906s | 3.337061686s | 116.287444ms | 4548 |
-| No Redis | 1000 | 1.618393602s | 2.896856922s | 57.08801ms | 1760 |
-
-- **Strategy**: The method used for handling requests.
-- **Unique Queries**: The number of unique queries in the test.
-- **Average Response Time**: The average time taken to respond to a request.
-- **Max Response Time**: The maximum time taken to respond to a request.
-- **Min Response Time**: The minimum time taken to respond to a request.
-- **Pass Validation**: The number of requests that passed validation.
-
-These results demonstrate the effectiveness of our strategies in handling high concurrency requests. Using Redis for caching shows significant improvements in response time, especially when the number of unique queries is reduced.
+1. **直接獲取(Instant Direct Get)**: 
+   - 將GET請求直接從資料庫獲取，隨後立即向用戶發送響應。
+   - 優缺點：
+     - 優點：簡單直接，實現容易，資料一致性高。
+     - 缺點：對於大量請求，可能會導致數據庫壓力過大，影響性能。
+   - API端點: GET /ads
+2. **快取鍵值為查詢字串 (Cache Key as Query String)**: 
+   - 使用Redis作為快取，快取鍵值為查詢字串參數。當收到GET請求時，先檢查Redis中是否有對應的快取，如果有，則直接從Redis中獲取並回應，否則從資料庫獲取並存入Redis。
+   - 優缺點：
+      - 優點：可以減輕資料庫的壓力，提高系統性能。
+      - 缺點：需要管理快取的生命週期，並處理快取失效的情況。
+   - API端點: GET /adsRedisStringParams
+3. **快取內容是全部當前活躍廣告 (Cache All Active Ads)**: 
+   - 使用Redis作為快取，快取內容是全部當前活躍廣告。當收到GET請求時，直接從Redis中獲取全部當前活躍廣告，再經由後端Filter過濾出符合條件的廣告後回應。為了減少序列化和反序列的操作時間，加上活躍的廣告筆數不多，因此使用了L1/L2 Caching存放當前全部廣告來進一步提升性能。
+   - 優缺點：
+   優點：可以減輕資料庫的壓力，提高系統性能，並且減少序列化和反序列的操作時間。
+   缺點：因為存放的所有活躍廣告，Filter過濾的複雜度是O(n)，喪失了在資料庫使用索引的優勢O(log(n))，因此較適合廣告筆數不高的情況。此外，如果活躍的廣告筆數非常多，可能會導致Redis壓力過大。
+   - API端點:GET /adsRedisActiveDocs
 
 
-### POST ###
-The following table presents the results of our experiments with different strategies for handling high concurrency POST and GET requests. Each strategy was tested with a load of 10,000 requests per second.
+## 實驗結果
 
-## Experiment Results
+### POST 
+- **實驗設置**：
+  - 開啟另一個服務供測試用，該服務同時發起10,000個Goroutine向我的後端發送HTTP POST請求，保證10,000個請求是在一秒內發送完畢。
+  - 10,000筆中每筆POST的廣告資料都是不同的，每個策略的測試所收到這一萬筆都是相同的，以確保實驗公平。
+- 以下表格展示了我用不同策略處理高並發POST請求的實驗結果。每種策略都經過每秒內收到10,000個請求的負載測試。
 
-The following table presents the results of our experiments with different strategies for handling high concurrency POST and GET requests. Each strategy was tested with a load of 10,000 requests per second.
 
-| Strategy | Average Response Time | Max Response Time | Min Response Time | Total Duration | 
-|----------|-----------------------|-------------------|-------------------|----------------|
-| Asynchronous Write (Local) | 859.619972ms | 1.647311543s | 2.115333ms | 58.621597ms   |
-| Asynchronous Write (HTTP Endpoint) | 898.034987ms | 1.317795309s | 109.471075ms | 42.034235ms   |
-| Bulk Write (Local) | 501.75155ms | 902.442501ms | 115.539µs | 47.504073ms   |
-| Bulk Write (HTTP Endpoint) | 573.98576ms | 907.051536ms | 78.065298ms |  137.577368ms |
-| Direct Write (Local) | 630.330655ms | 1.115631343s | 294.721µs |  29.584926ms |
-| Direct Write (HTTP Endpoint) | 650.709399ms | 1.23349069s | 20.320745ms | 122.25947815ms  |
+  
+| 策略 | 平均響應時間 | 最大響應時間 | 最小響應時間 | 請求發送完畢時間 |性能提升 | 
+|----------|-----------------------|-------------------|-------------------|----------------|----------------|
+| 直接寫入(基線) | 509.5ms| 928.1ms | 221.6ms |  626.3ms |0%| 
+| 發布者 / 訂閱者的批次寫入|396.5ms |878.8ms| 111.4ms | 349.2ms| 50.4% | 
+| 佇列異步寫入 |279.5ms| 902.4ms |5.5ms |  686.6ms| 45.1%| 
+
+- **平均響應時間**:: 每個HTTP POST請求，從用戶發出到收到回應所需的平均時間。
+- **最大響應時間**:: 所有HTTP POST請求中，用戶發出到收到回應，所花費的最大時間
+- **最小響應時間**:: 所有HTTP POST請求中，用戶發出到收到回應，所花費的最小時間
+- **請求發送完畢時間**:: 這10,000個請求，從第一個用戶發出請求，到最後一個用戶發出請求的時間，保證是小於一秒。
+- **性能提升**:: 性能提升 = (基線平均響應時間 - 新策略平均響應時間) / 基線平均響應時間 * 100%
+
+
+- **實驗結果**：實驗結果都超越了需求的一秒處理3,000個POST的能力，甚至都超越一秒處理10,000個POST的能力。從上述數據可以看出，無論是使用發布者/訂閱者的批次寫入策略還是佇列異步寫入策略，都能顯著提高性能。特別是當使用佇列異步寫入的策略時，平均響應時間能降低到279.5毫秒，性能提升達到45.1%，遠超過直接寫入的策略。這證明在高並發的情況下，適當的寫入策略能有效提升系統的處理能力和響應速度。
 
 
 
-- **Strategy**: The method used for handling requests.
-- **Average Response Time**: The average time taken to respond to a request.
-- **Max Response Time**: The maximum time taken to respond to a request.
-- **Min Response Time**: The minimum time taken to respond to a request.
-- **Total Duration**: The total duration of sending all requests from client the beckend.
-- **Successful Requests**: The number of requests that were successful.
-- **Error Requests**: The number of requests that resulted in an error.
-
-These results demonstrate the effectiveness of our strategies in handling high concurrency requests. Asynchronous Write and Cache Recent Requests strategies, in particular, show significant improvements in response time and error rate.
+### GET 
+- **實驗設置**：
+  - 開啟另一個服務供測試用，該服務同時發起10,000個Goroutine向我的後端發送HTTP POST請求，保證10,000個請求是在一秒內發送完畢。
+  - 10,000筆中每筆POST的廣告資料都是不同的，每個策略的測試所收到這一萬筆都是相同的，以確保實驗公平。
+- 以下表格展示了我用不同策略處理高並發POST請求的實驗結果。每種策略都經過每秒內收到10,000個請求的負載測試。
 
 
+當查詢字串查詢字串種類數量為5000筆時：
 
-## Running the Service
+| 策略 | 查詢字串種類數量 | 平均響應時間 | 最大響應時間 | 最小響應時間 | 請求發送完畢時間 |性能提升 | 
+|----------|-----------------------|-----------------------|-------------------|-------------------|----------------|----------------|
+| 直接獲取(基線) |5000 | 1.82s| 3.48s | 305.131451ms |  95.4ms |0%| 
+| 快取查詢字串|5000  |901.2ms |1.87s| 3.48s | 7.9ms |  759.2ms | 50.4% | 
+| 快取當前活躍廣告 |5000 | 789.1ms| 1.08s |117.1ms |  120.9ms | 56.6%| 
 
-You can use Docker Compose to build and run the service:
-### run the service
+當查詢字串查詢字串種類數量為3000筆時：
+
+| 策略 | 查詢字串種類數量 | 平均響應時間 | 最大響應時間 | 最小響應時間 | 請求發送完畢時間 |性能提升 | 
+|----------|-----------------------|-----------------------|-------------------|-------------------|----------------|----------------|
+| 直接獲取(基線) |3000 | 1.59s | 3.6s |  100.5ms | 622.2ms   |0%| 
+| 快取查詢字串 |3000 |862.4ms |2.48s| 2.488s | 91.3ms |  755.4ms |45.7% | 
+| 快取當前活躍廣告 |3000 | 547.7ms| 989.9ms|149.3ms | 536.3ms | 65.5%| 
+
+當查詢字串查詢字串種類數量為1000筆時：
+
+| 策略 | 查詢字串種類數量 | 平均響應時間 | 最大響應時間 | 最小響應時間 | 請求發送完畢時間 |性能提升 | 
+|----------|-----------------------|-----------------------|-------------------|-------------------|----------------|----------------|
+| 直接獲取(基線) |1000|1.64s | 3.18s | 32.3ms | 686.6ms   |0%| 
+| 快取查詢字串 |1000|695.7ms |1.16s| 59.6ms |   80.3ms | 57.6%| 
+| 快取當前活躍廣告 |1000 |  458.5ms| 997.5ms |136.2µs |  539.1ms |72.0% | 
+
+- **查詢字串種類數量**: 10,000筆中的查詢字串種類數量，會影響快取命中率，當查詢字串數量種類越多，對於有快取的策略來說，平均響應時間應該就會越長。
+- 實驗結果：從上述數據可以看出，無論查詢字串種類數量為5000、3000還是1000，使用快取查詢字串和快取當前活躍廣告的策略都能顯著提高性能。特別是當查詢字串種類數量為1000時，快取當前活躍廣告的策略能將平均響應時間降低到458.5毫秒，性能提升達到72.0%，遠超過其他策略。這證明在高並發的情況下，適當的快取策略能有效提升系統的處理能力和響應速度。
+
+## 系統目錄
+```
+├─go-backend
+│  ├─db：這個資料夾包含與資料庫相關的程式碼。
+│  ├─handlers：這個資料夾包含處理HTTP請求的程式碼。
+│  └─models：這個資料夾包含定義資料模型的程式碼。
+└─test_report：這個資料夾包含測試報告。
+```
+
+
+### 啟動程式
+本系統使用 Docker Compose 進行容器化
+執行服務
+
 ```bash
 docker-compose up --build go-backend-test
 ```
-### Running the Test
+啟動測試
 ```
  docker-compose up --build go-backend-test; docker-compose down go-backend-test; docker rmi ad-placement-service-go-backend-test:latest
  ```

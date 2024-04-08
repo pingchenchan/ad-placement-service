@@ -1,0 +1,16 @@
+2024/04/07 23:53:37 successfullly created indexes
+=== RUN   TestCreateAd_HTTP_Endpoint_Concurrency
+2024/04/07 23:53:37 successfullly dropped database and collection
+2024/04/07 23:53:37 successfullly created indexes
+    post_test.go:204: Numbers of error requests: 0
+    post_test.go:205: Numbers of successful requests: 10000
+    post_test.go:206: Time from first to last request: 626.346024ms
+    post_test.go:101: Endpoint: http://go-backend:8080/ads
+    post_test.go:102: Average request time: 509.558323ms
+    post_test.go:103: Max request time: 928.108849ms
+    post_test.go:104: Min request time: 221.61145ms
+    post_test.go:105: Total duration of requests: 959.411195ms
+--- PASS: TestCreateAd_HTTP_Endpoint_Concurrency (1.01s)
+PASS
+coverage: 24.0% of statements
+ok  	github.com/pingchenchan/ad-placement-service	1.027s

@@ -13,6 +13,7 @@ func ConnectRedis(uri string) ( error) {
 		Addr:     uri,
 		Password: "",
 		DB:       0,
+		PoolSize: 10000, 
 	})
 
 	ctx := context.Background()
@@ -29,4 +30,9 @@ func ConnectRedis(uri string) ( error) {
 func ClearRedis() error {
 	ctx := context.Background()
 	return Redis.FlushAll(ctx).Err()
+}
+
+func DeleteCache() error {
+    ctx := context.Background()
+	return Redis.Del(ctx, "cacheStringParams").Err()
 }

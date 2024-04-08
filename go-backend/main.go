@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-
 	"github.com/gin-gonic/gin"
 	"github.com/pingchenchan/ad-placement-service/db"
 	"github.com/pingchenchan/ad-placement-service/handlers"
@@ -48,8 +47,8 @@ func main() {
 		handlers.CreateAsyncAd(c, countryCodeValidator)
 	})
 	router.GET("/ads", handlers.GetAds)
-	router.GET("/adsRedix", handlers.GetAdsWRedis)
-
+	router.GET("/adsRedisStringParams", handlers.GetadsRedisStringParams)
+	router.GET("/adsRedisActiveDocs", handlers.GetAdsWRedisActiveDocs)
 	router.GET("/ad", handlers.GetAd)
 	// Start server
 	router.Run(":8080")
